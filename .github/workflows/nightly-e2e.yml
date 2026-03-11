@@ -64,15 +64,15 @@ jobs:
         run: |
           gtc --version
 
-      - name: Run gtc doctor
-        shell: bash
-        run: |
-          gtc doctor
-
       - name: Test gtc install (Public)
         shell: bash
         run: |
           gtc install
+
+      - name: Run gtc doctor
+        shell: bash
+        run: |
+          gtc doctor
 
       - name: Test gtc install --tenant
         shell: bash
