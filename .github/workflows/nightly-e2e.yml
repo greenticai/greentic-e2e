@@ -75,12 +75,15 @@ jobs:
           gtc install
 
       - name: Test gtc install --tenant
-        if: ${{ secrets.GREENTIC_TENANT_KEY != '' }}
         shell: bash
         env:
-          TEST_TENANT: ${{ github.event.inputs.test_tenant || 'e2e-nightly' }}
+          TEST_TENANT: ${{ github.event.inputs.test_tenant || 'acme' }}
           GREENTIC_TENANT_KEY: ${{ secrets.GREENTIC_TENANT_KEY }}
         run: |
+          if [ -z "$GREENTIC_TENANT_KEY" ]; then
+            echo "Skipping tenant installation - GREENTIC_TENANT_KEY not set"
+            exit 0
+          fi
           gtc install --tenant "$TEST_TENANT" --key "$GREENTIC_TENANT_KEY"
 
       - name: Check Artifacts
