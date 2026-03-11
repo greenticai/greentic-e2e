@@ -86,5 +86,20 @@ jobs:
       - name: Check Artifacts
         shell: bash
         run: |
-          echo "Checking installed artifacts..."
-          ls -R ~/.greentic || echo "Home directory not found"
+          set -euo pipefail
+
+          ARTIFACT_ROOT="$HOME/.greentic/artifacts"
+          test -d "$ARTIFACT_ROOT"
+
+          echo "Artifact root:"
+          ls -la "$ARTIFACT_ROOT"
+
+          for dir in components packs bundles; do
+            path="$ARTIFACT_ROOT/$dir"
+            if [[ -d "$path" ]]; then
+              echo "$dir:"
+              ls -la "$path"
+            else
+              echo "Missing artifact directory: $path"
+            fi
+          done
