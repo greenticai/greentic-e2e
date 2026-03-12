@@ -57,7 +57,7 @@ jobs:
       - name: Install gtc
         shell: bash
         run: |
-          cargo binstall -y gtc --version "$GTC_VERSION"
+          cargo binstall -y gtc@$GTC_VERSION
 
       - name: Verify gtc version
         shell: bash
