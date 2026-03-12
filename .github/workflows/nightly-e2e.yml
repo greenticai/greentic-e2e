@@ -11,7 +11,7 @@ on:
         required: false
 
 env:
-  GTC_VERSION: 0.9.4
+  GTC_VERSION: 0.9.5
 
 jobs:
   e2e-tests:
