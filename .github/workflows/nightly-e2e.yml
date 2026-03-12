@@ -7,7 +7,7 @@ on:
     inputs:
       test_tenant:
         description: 'Tenant name for gtc install --tenant'
-        default: 'e2e-test-tenant'
+        default: 'acme'
         required: false
 
 env:
