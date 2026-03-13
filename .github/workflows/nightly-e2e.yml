@@ -5,13 +5,17 @@ on:
     - cron: '0 0 * * *'
   workflow_dispatch:
     inputs:
+      gtc_version:
+        description: 'gtc version to test'
+        default: '0.9.5'
+        required: false
       test_tenant:
         description: 'Tenant name for gtc install --tenant'
         default: 'acme'
         required: false
 
 env:
-  GTC_VERSION: 0.9.6
+  GTC_VERSION: ${{ github.event.inputs.gtc_version || '0.9.5' }}
 
 jobs:
   e2e-tests:
@@ -23,12 +27,12 @@ jobs:
         include:
           - os: ubuntu-latest
             arch: x64
-#          - os: ubuntu-latest
-#            arch: arm64
-#          - os: macos-14
-#            arch: arm64
-#          - os: windows-latest
-#            arch: x64
+          - os: ubuntu-latest
+            arch: arm64
+          - os: macos-14
+            arch: arm64
+          - os: windows-latest
+            arch: x64
 
     steps:
       - uses: actions/checkout@v4
