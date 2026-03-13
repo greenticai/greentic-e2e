@@ -121,12 +121,22 @@ jobs:
 
           expect /tmp/gtc-wizard-smoke.expect
 
-      - name: Verify gtc wizard router
+      - name: Verify gtc wizard launches
         if: matrix.os == 'ubuntu-latest'
         shell: bash
         run: |
-          gtc wizard --debug-router 2>&1 | tee /tmp/gtc-wizard-router.log
-          grep -Eiq 'wizard|greentic' /tmp/gtc-wizard-router.log
+          cat >/tmp/gtc-wizard-router.expect <<'EOF'
+          set timeout 15
+          spawn gtc wizard --debug-router
+          expect {
+            -re "Greentic Developer Wizard|Build / Update a Pack|Build / Update a Production Bundle" {}
+            timeout { exit 1 }
+          }
+          send "0\r"
+          expect eof
+          EOF
+
+          expect /tmp/gtc-wizard-router.expect
 
       - name: Test gtc wizard navigation
         if: matrix.os == 'ubuntu-latest'
