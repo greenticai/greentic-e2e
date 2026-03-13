@@ -29,10 +29,12 @@ jobs:
             arch: x64
           - os: ubuntu-latest
             arch: arm64
-          - os: macos-14
+          - os: macos-15
             arch: arm64
           - os: windows-latest
             arch: x64
+          - os: windows-latest
+            arch: x86
 
     steps:
       - uses: actions/checkout@v4
@@ -47,6 +49,14 @@ jobs:
           toolchain: 1.91.0
           targets: wasm32-wasip2
 
+      - name: Generate access token for BIZ organization
+        id: generate_biz_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.BIZ_APP_ID }}
+          private-key: ${{ secrets.BIZ_APP_PRIVATE_KEY }}
+          owner: greentic-biz
+
       - name: Install cargo-binstall
         shell: bash
         run: |
@@ -60,8 +70,11 @@ jobs:
 
       - name: Install gtc
         shell: bash
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+          CARGO_REGISTRY_TOKEN: ${{ steps.generate_biz_token.outputs.token }}
         run: |
-          cargo binstall -y gtc --version "$GTC_VERSION"
+          cargo binstall -y gtc@$GTC_VERSION
 
       - name: Verify gtc version
         shell: bash
@@ -70,11 +83,17 @@ jobs:
 
       - name: Test gtc install (Public)
         shell: bash
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+          CARGO_REGISTRY_TOKEN: ${{ steps.generate_biz_token.outputs.token }}
         run: |
           gtc install
 
       - name: Run gtc doctor
         shell: bash
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+          CARGO_REGISTRY_TOKEN: ${{ steps.generate_biz_token.outputs.token }}
         run: |
           gtc doctor
 
@@ -133,6 +152,8 @@ jobs:
         env:
           TEST_TENANT: ${{ github.event.inputs.test_tenant || 'acme' }}
           GREENTIC_TENANT_KEY: ${{ secrets.GREENTIC_TENANT_KEY }}
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+          CARGO_REGISTRY_TOKEN: ${{ steps.generate_biz_token.outputs.token }}
         run: |
           if [ -z "$GREENTIC_TENANT_KEY" ]; then
             echo "Skipping tenant installation - GREENTIC_TENANT_KEY not set"
