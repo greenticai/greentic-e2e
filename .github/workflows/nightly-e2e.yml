@@ -11,7 +11,7 @@ on:
         required: false
 
 env:
-  GTC_VERSION: 0.9.5
+  GTC_VERSION: 0.9.6
 
 jobs:
   e2e-tests:
@@ -97,6 +97,32 @@ jobs:
           EOF
 
           expect /tmp/gtc-wizard-smoke.expect
+
+      - name: Verify gtc wizard router
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          gtc wizard --debug-router 2>&1 | tee /tmp/gtc-wizard-router.log
+          grep -Eiq 'wizard|greentic' /tmp/gtc-wizard-router.log
+
+      - name: Test gtc wizard navigation
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: |
+          cat >/tmp/gtc-wizard-nav.expect <<'EOF'
+          set timeout 15
+          spawn gtc wizard
+          expect {
+            -re "Greentic|wizard|menu" {}
+            timeout { exit 1 }
+          }
+          send "\033\[B"
+          send "\033\[A"
+          send "q\r"
+          expect eof
+          EOF
+
+          expect /tmp/gtc-wizard-nav.expect
 
       - name: Test gtc install --tenant
         shell: bash
