@@ -11,7 +11,7 @@ on:
         required: false
       test_tenant:
         description: 'Tenant name for gtc install --tenant'
-        default: 'acme'
+        default: '3point'
         required: false
 
 env:
@@ -87,6 +87,8 @@ jobs:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
           CARGO_REGISTRY_TOKEN: ${{ steps.generate_biz_token.outputs.token }}
         run: |
+          set -euo pipefail
+
           gtc install
 
       - name: Run gtc doctor
@@ -164,23 +166,19 @@ jobs:
       - name: Test gtc install --tenant
         shell: bash
         env:
-          TEST_TENANT: ${{ github.event.inputs.test_tenant || 'acme' }}
+          TEST_TENANT: ${{ github.event.inputs.test_tenant || '3point' }}
           GREENTIC_TENANT_KEY: ${{ secrets.GREENTIC_TENANT_KEY }}
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
           CARGO_REGISTRY_TOKEN: ${{ steps.generate_biz_token.outputs.token }}
         run: |
+          set -euo pipefail
+
           if [ -z "$GREENTIC_TENANT_KEY" ]; then
             echo "Skipping tenant installation - GREENTIC_TENANT_KEY not set"
             exit 0
           fi
-          
-          # Attempt installation but don't fail the whole workflow
-          if ! gtc install --tenant "$TEST_TENANT" --key "$GREENTIC_TENANT_KEY"; then
-            echo "⚠️  Tenant installation failed or not implemented"
-            echo "This may be expected if tenant setup isn't required"
-          else
-            echo "✅ Tenant installation successful"
-          fi
+
+          gtc install --tenant "$TEST_TENANT" --key "$GREENTIC_TENANT_KEY"
 
       - name: Check Artifacts
         shell: bash
