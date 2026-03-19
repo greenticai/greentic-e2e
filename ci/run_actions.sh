@@ -11,13 +11,14 @@ HOST_OS="$(uname -s)"
 HOST_ARCH="$(uname -m)"
 
 GTC_VERSION="${GTC_VERSION:-0.9.5}"
-TEST_TENANT="${TEST_TENANT:-3point}"
+GREENTIC_TENANT="${GREENTIC_TENANT:-3point}"
 ACT_JOB="${ACT_JOB:-e2e-tests}"
-ACT_MATRIX_OS="${ACT_MATRIX_OS:-ubuntu-latest}"
+ACT_MATRIX_OS="${ACT_MATRIX_OS:-linux}"
 ACT_MATRIX_ARCH="${ACT_MATRIX_ARCH:-x64}"
 ACT_DOCKER_CONTEXT="${ACT_DOCKER_CONTEXT:-}"
 ACT_DOCKER_HOST="${ACT_DOCKER_HOST:-}"
 ACT_SECRET_FILE="${ACT_SECRET_FILE:-${ROOT_DIR}/.secrets}"
+ACT_PLATFORM_IMAGE="${ACT_PLATFORM_IMAGE:-catthehacker/ubuntu:act-24.04}"
 
 case "$HOST_ARCH" in
   arm64|aarch64)
@@ -62,6 +63,31 @@ require_secret() {
   fi
 
   die "Missing required secret ${key}. Export it in your shell or add it to ${ACT_SECRET_FILE} before running ci/run_actions.sh."
+}
+
+require_secret_any() {
+  local first_key="$1"
+  local second_key="$2"
+
+  local first_value="${!first_key:-}"
+  if [[ -z "$first_value" ]]; then
+    first_value="$(secret_value_from_file "$first_key")"
+  fi
+
+  if [[ -n "$first_value" ]]; then
+    return
+  fi
+
+  local second_value="${!second_key:-}"
+  if [[ -z "$second_value" ]]; then
+    second_value="$(secret_value_from_file "$second_key")"
+  fi
+
+  if [[ -n "$second_value" ]]; then
+    return
+  fi
+
+  die "Missing required secret ${first_key} (or legacy ${second_key}). Export it in your shell or add it to ${ACT_SECRET_FILE} before running ci/run_actions.sh."
 }
 
 docker_context_exists() {
@@ -115,11 +141,11 @@ if [[ ! -x "$ACT_BIN" ]]; then
   install_act
 fi
 
-if [[ "$ACT_MATRIX_OS" != "ubuntu-latest" ]]; then
-  die "act can only run the Linux workflow locally. Set ACT_MATRIX_OS=ubuntu-latest."
+if [[ "$ACT_MATRIX_OS" != "linux" ]]; then
+  die "act can only run the Linux workflow locally. Set ACT_MATRIX_OS=linux."
 fi
 
-require_secret GREENTIC_TENANT_KEY
+require_secret_any GREENTIC_TENANT_TOKEN GREENTIC_TENANT_KEY
 
 DOCKER_HOST_RESOLVED="$(resolve_docker_host)"
 
@@ -133,15 +159,27 @@ ACT_ARGS=(
   --job "$ACT_JOB"
   --rm
   --input "gtc_version=${GTC_VERSION}"
-  --input "test_tenant=${TEST_TENANT}"
+  --input "greentic_tenant=${GREENTIC_TENANT}"
   --matrix "os:${ACT_MATRIX_OS}"
   --matrix "arch:${ACT_MATRIX_ARCH}"
+  -P "ubuntu-24.04=${ACT_PLATFORM_IMAGE}"
   --container-architecture "$ACT_CONTAINER_ARCHITECTURE"
   --container-daemon-socket "$DOCKER_HOST_RESOLVED"
 )
 
-if [[ -n "${GREENTIC_TENANT_KEY:-}" ]]; then
-  ACT_ARGS+=(--secret "GREENTIC_TENANT_KEY=${GREENTIC_TENANT_KEY}")
+GREENTIC_TENANT_TOKEN_VALUE="${GREENTIC_TENANT_TOKEN:-}"
+if [[ -z "$GREENTIC_TENANT_TOKEN_VALUE" ]]; then
+  GREENTIC_TENANT_TOKEN_VALUE="$(secret_value_from_file GREENTIC_TENANT_TOKEN)"
+fi
+if [[ -z "$GREENTIC_TENANT_TOKEN_VALUE" ]]; then
+  GREENTIC_TENANT_TOKEN_VALUE="${GREENTIC_TENANT_KEY:-}"
+fi
+if [[ -z "$GREENTIC_TENANT_TOKEN_VALUE" ]]; then
+  GREENTIC_TENANT_TOKEN_VALUE="$(secret_value_from_file GREENTIC_TENANT_KEY)"
+fi
+
+if [[ -n "$GREENTIC_TENANT_TOKEN_VALUE" ]]; then
+  ACT_ARGS+=(--secret "GREENTIC_TENANT_TOKEN=${GREENTIC_TENANT_TOKEN_VALUE}")
 fi
 
 exec env DOCKER_HOST="$DOCKER_HOST_RESOLVED" DOCKER_CONTEXT= "$ACT_BIN" "${ACT_ARGS[@]}"

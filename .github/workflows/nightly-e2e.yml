@@ -9,39 +9,50 @@ on:
         description: 'gtc version to test'
         default: '0.9.5'
         required: false
-      test_tenant:
+      greentic_tenant:
         description: 'Tenant name for gtc install --tenant'
         default: '3point'
         required: false
 
 env:
   GTC_VERSION: ${{ github.event.inputs.gtc_version || '0.9.5' }}
+  GREENTIC_TENANT: ${{ github.event.inputs.greentic_tenant || vars.GREENTIC_TENANT || '3point' }}
 
 jobs:
   e2e-tests:
-    name: ${{ matrix.os }} (${{ matrix.arch }})
-    runs-on: ${{ matrix.os }}
+    name: ${{ matrix.label }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
+          - label: Linux (x64)
+            os: linux
+            runner: ubuntu-24.04
             arch: x64
-          - os: ubuntu-latest
+          - label: Linux (arm64)
+            os: linux
+            runner: ubuntu-24.04-arm
             arch: arm64
-          - os: macos-15
+          - label: macOS 15 (arm64)
+            os: macos-15
+            runner: macos-15
             arch: arm64
-          - os: windows-latest
+          - label: macOS 15 (x64)
+            os: macos-15
+            runner: macos-15-intel
             arch: x64
-          - os: windows-latest
-            arch: x86
+          - label: Windows (x64)
+            os: windows
+            runner: windows-latest
+            arch: x64
+          - label: Windows (arm64)
+            os: windows
+            runner: windows-11-arm
+            arch: arm64
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        if: matrix.os == 'ubuntu-latest' && matrix.arch == 'arm64'
-        uses: docker/setup-qemu-action@v3
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
@@ -53,9 +64,7 @@ jobs:
         shell: bash
         run: |
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            curl -L -o binstall.zip https://github.com/cargo-bins/cargo-binstall/releases/latest/download/cargo-binstall-x86_64-pc-windows-msvc.zip
-            unzip binstall.zip
-            mv cargo-binstall.exe /usr/bin/ || cp cargo-binstall.exe /c/Users/runneradmin/.cargo/bin/
+            cargo install cargo-binstall --locked
           else
             curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           fi
@@ -148,20 +157,45 @@ jobs:
 
           expect /tmp/gtc-wizard-nav.expect
 
-      - name: Test gtc install --tenant
+      - name: Print tenant install context
         shell: bash
         env:
-          TEST_TENANT: ${{ github.event.inputs.test_tenant || '3point' }}
-          GREENTIC_TENANT_KEY: ${{ secrets.GREENTIC_TENANT_KEY }}
+          GREENTIC_TENANT_TOKEN: ${{ secrets.GREENTIC_TENANT_TOKEN || secrets.GREENTIC_TENANT_KEY }}
         run: |
           set -euo pipefail
 
-          if [ -z "$GREENTIC_TENANT_KEY" ]; then
-            echo "Skipping tenant installation - GREENTIC_TENANT_KEY not set"
-            exit 0
+          tenant_len="$(printf '%s' "$GREENTIC_TENANT" | wc -c | tr -d ' ')"
+          tenant_sha="$(printf '%s' "$GREENTIC_TENANT" | shasum -a 256 | awk '{print $1}')"
+
+          echo "Resolved tenant length: ${tenant_len}"
+          echo "Resolved tenant sha256[0:12]: ${tenant_sha:0:12}"
+          echo "Expected tenant OCI ref: oci://ghcr.io/greentic-biz/customers-tools/${GREENTIC_TENANT}:latest"
+          if [ -n "$GREENTIC_TENANT_TOKEN" ]; then
+            echo "Tenant token set: yes"
+          else
+            echo "Tenant token set: no"
           fi
 
-          gtc install --tenant "$TEST_TENANT" --key "$GREENTIC_TENANT_KEY"
+      - name: Test gtc install --tenant
+        shell: bash
+        env:
+          GREENTIC_TENANT_TOKEN: ${{ secrets.GREENTIC_TENANT_TOKEN || secrets.GREENTIC_TENANT_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$GREENTIC_TENANT_TOKEN" ]; then
+            echo "GREENTIC_TENANT_TOKEN secret is required for tenant installation"
+            exit 1
+          fi
+
+          if gtc install --help | grep -q -- '--token'; then
+            gtc install --tenant "$GREENTIC_TENANT" --token "$GREENTIC_TENANT_TOKEN"
+          elif gtc install --help | grep -q -- '--key'; then
+            gtc install --tenant "$GREENTIC_TENANT" --key "$GREENTIC_TENANT_TOKEN"
+          else
+            echo "gtc install does not support tenant credentials for this version"
+            exit 1
+          fi
 
       - name: Check Artifacts
         shell: bash
