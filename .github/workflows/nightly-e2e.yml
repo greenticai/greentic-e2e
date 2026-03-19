@@ -49,14 +49,6 @@ jobs:
           toolchain: 1.91.0
           targets: wasm32-wasip2
 
-      - name: Generate access token for BIZ organization
-        id: generate_biz_token
-        uses: actions/create-github-app-token@v1
-        with:
-          app-id: ${{ secrets.BIZ_APP_ID }}
-          private-key: ${{ secrets.BIZ_APP_PRIVATE_KEY }}
-          owner: greentic-biz
-
       - name: Install cargo-binstall
         shell: bash
         run: |
@@ -72,7 +64,6 @@ jobs:
         shell: bash
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-          CARGO_REGISTRY_TOKEN: ${{ steps.generate_biz_token.outputs.token }}
         run: |
           cargo binstall -y gtc@$GTC_VERSION
 
@@ -83,9 +74,6 @@ jobs:
 
       - name: Test gtc install (Public)
         shell: bash
-        env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-          CARGO_REGISTRY_TOKEN: ${{ steps.generate_biz_token.outputs.token }}
         run: |
           set -euo pipefail
 
@@ -93,9 +81,6 @@ jobs:
 
       - name: Run gtc doctor
         shell: bash
-        env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-          CARGO_REGISTRY_TOKEN: ${{ steps.generate_biz_token.outputs.token }}
         run: |
           gtc doctor
 
@@ -168,8 +153,6 @@ jobs:
         env:
           TEST_TENANT: ${{ github.event.inputs.test_tenant || '3point' }}
           GREENTIC_TENANT_KEY: ${{ secrets.GREENTIC_TENANT_KEY }}
-          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-          CARGO_REGISTRY_TOKEN: ${{ steps.generate_biz_token.outputs.token }}
         run: |
           set -euo pipefail
 
