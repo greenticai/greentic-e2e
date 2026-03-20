@@ -1,0 +1,25 @@
+{
+  "plan_version": 1,
+  "metadata": {
+    "target": "launcher",
+    "mode": "main",
+    "locale": "en",
+    "frontend": "text"
+  },
+  "steps": [
+    {
+      "type": "LaunchPackWizard"
+    },
+    {
+      "type": "RunCommand",
+      "program": "greentic-pack",
+      "args": [
+        "wizard",
+        "apply",
+        "--answers",
+        ".greentic/wizard/run-1774019937/delegated-answers.json",
+        "--dry-run"
+      ]
+    }
+  ]
+}

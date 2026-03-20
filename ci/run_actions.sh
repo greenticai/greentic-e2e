@@ -8,9 +8,8 @@ ACT_BIN="${BIN_DIR}/act"
 INSTALLER="${BIN_DIR}/act-install.sh"
 WORKFLOW="${ROOT_DIR}/.github/workflows/nightly-e2e.yml"
 HOST_OS="$(uname -s)"
-HOST_ARCH="$(uname -m)"
 
-GTC_VERSION="${GTC_VERSION:-0.9.5}"
+GTC_VERSION="${GTC_VERSION:-latest}"
 GREENTIC_TENANT="${GREENTIC_TENANT:-3point}"
 ACT_JOB="${ACT_JOB:-e2e-tests}"
 ACT_MATRIX_OS="${ACT_MATRIX_OS:-linux}"
@@ -19,13 +18,17 @@ ACT_DOCKER_CONTEXT="${ACT_DOCKER_CONTEXT:-}"
 ACT_DOCKER_HOST="${ACT_DOCKER_HOST:-}"
 ACT_SECRET_FILE="${ACT_SECRET_FILE:-${ROOT_DIR}/.secrets}"
 ACT_PLATFORM_IMAGE="${ACT_PLATFORM_IMAGE:-catthehacker/ubuntu:act-24.04}"
+ACT_PULL="${ACT_PULL:-false}"
 
-case "$HOST_ARCH" in
+case "${ACT_MATRIX_ARCH}" in
   arm64|aarch64)
     ACT_CONTAINER_ARCHITECTURE="${ACT_CONTAINER_ARCHITECTURE:-linux/arm64}"
     ;;
-  *)
+  x64|amd64)
     ACT_CONTAINER_ARCHITECTURE="${ACT_CONTAINER_ARCHITECTURE:-linux/amd64}"
+    ;;
+  *)
+    die "Unsupported ACT_MATRIX_ARCH=${ACT_MATRIX_ARCH}. Use x64 or arm64."
     ;;
 esac
 
@@ -158,11 +161,13 @@ ACT_ARGS=(
   --workflows "$WORKFLOW"
   --job "$ACT_JOB"
   --rm
+  --pull="${ACT_PULL}"
   --input "gtc_version=${GTC_VERSION}"
   --input "greentic_tenant=${GREENTIC_TENANT}"
   --matrix "os:${ACT_MATRIX_OS}"
   --matrix "arch:${ACT_MATRIX_ARCH}"
   -P "ubuntu-24.04=${ACT_PLATFORM_IMAGE}"
+  -P "ubuntu-24.04-arm=${ACT_PLATFORM_IMAGE}"
   --container-architecture "$ACT_CONTAINER_ARCHITECTURE"
   --container-daemon-socket "$DOCKER_HOST_RESOLVED"
 )

@@ -7,7 +7,7 @@ on:
     inputs:
       gtc_version:
         description: 'gtc version to test'
-        default: '0.9.5'
+        default: 'latest'
         required: false
       greentic_tenant:
         description: 'Tenant name for gtc install --tenant'
@@ -15,7 +15,7 @@ on:
         required: false
 
 env:
-  GTC_VERSION: ${{ github.event.inputs.gtc_version || '0.9.5' }}
+  GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
   GREENTIC_TENANT: ${{ github.event.inputs.greentic_tenant || vars.GREENTIC_TENANT || '3point' }}
 
 jobs:
@@ -54,11 +54,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: 1.91.0
-          targets: wasm32-wasip2
+      - name: Bootstrap toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! command -v rustup >/dev/null 2>&1; then
+            if [[ "${{ runner.os }}" == "Windows" ]]; then
+              curl -fsSL -o rustup-init.exe https://win.rustup.rs/x86_64
+              ./rustup-init.exe -y --profile minimal --default-toolchain 1.91.0
+              export PATH="$HOME/.cargo/bin:$PATH"
+            else
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.91.0
+              export PATH="$HOME/.cargo/bin:$PATH"
+            fi
+          fi
+
+          rustup toolchain install 1.91.0 --profile minimal
+          rustup default 1.91.0
+          rustup target add wasm32-wasip2 --toolchain 1.91.0
+
+          rustc --version
+          cargo --version
 
       - name: Install cargo-binstall
         shell: bash
@@ -69,19 +86,23 @@ jobs:
             curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           fi
 
-      - name: Install gtc
+      - name: Install gtc CLI
         shell: bash
         env:
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: |
-          cargo binstall -y gtc@$GTC_VERSION
+          if [[ -z "${GTC_VERSION}" || "${GTC_VERSION}" == "latest" ]]; then
+            cargo binstall -y gtc
+          else
+            cargo binstall -y "gtc@${GTC_VERSION}"
+          fi
 
       - name: Verify gtc version
         shell: bash
         run: |
           gtc --version
 
-      - name: Test gtc install (Public)
+      - name: Run gtc public install
         shell: bash
         run: |
           set -euo pipefail
@@ -93,7 +114,7 @@ jobs:
         run: |
           gtc doctor
 
-      - name: Install expect
+      - name: Install expect for wizard tests
         if: runner.os == 'Linux' || runner.os == 'macOS'
         shell: bash
         run: |
@@ -104,58 +125,194 @@ jobs:
             brew install expect
           fi
 
-      - name: Smoke test gtc wizard
+      - name: Prepare wizard test workspace
         if: runner.os == 'Linux' || runner.os == 'macOS'
         shell: bash
         run: |
-          cat >/tmp/gtc-wizard-smoke.expect <<'EOF'
-          set timeout 15
-          spawn gtc wizard
-          expect {
-            -re "Greentic|wizard|menu" {}
-            timeout { exit 1 }
-          }
-          send "q\r"
-          expect eof
-          EOF
+          set -euo pipefail
 
-          expect /tmp/gtc-wizard-smoke.expect
+          root="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gtc-wizard-e2e.XXXXXX")"
+          {
+            echo "WIZARD_E2E_ROOT=${root}"
+            echo "WIZARD_PACK_DIR=/tmp/test-pack"
+            echo "WIZARD_COMPONENT_DIR=${root}/component"
+            echo "WIZARD_BUNDLE_DIR=${root}/bundle"
+            echo "WIZARD_ANSWERS=${root}/answers.json"
+          } >>"$GITHUB_ENV"
 
-      - name: Verify gtc wizard launches
+          rm -rf /tmp/test-pack
+
+      - name: Run gtc wizard interactive test
         if: runner.os == 'Linux' || runner.os == 'macOS'
         shell: bash
         run: |
-          cat >/tmp/gtc-wizard-router.expect <<'EOF'
-          set timeout 15
+          cat >/tmp/gtc-wizard-traversal.expect <<'EOF'
+          set timeout 30
+          set pack_dir $env(WIZARD_PACK_DIR)
+
           spawn gtc wizard --debug-router
           expect {
-            -re "Greentic Developer Wizard|Build / Update a Pack|Build / Update a Production Bundle" {}
+            -re "Router exec: greentic-dev" {}
             timeout { exit 1 }
           }
+
+          expect "Select option:"
+          send "1\r"
+
+          expect "> "
+          send "1\r"
+          expect "Pack id"
+          expect "> "
+          send "ai.greentic.e2e.pack\r"
+          expect "Pack directory"
+          expect "> "
+          send "$pack_dir\r"
+
+          expect "> "
+          send "1\r"
+          expect "Select action"
+          expect "> "
+          send "0\r"
+
+          expect "> "
+          send "2\r"
+          expect "wizard interactive mode"
+          expect "Select an option"
+          send "0\r"
+
+          expect "> "
+          send "0\r"
+          expect "> "
+          send "0\r"
+          expect "Select option:"
+          send "2\r"
+          expect "Bundle Wizard"
+          expect "Select number or value:"
+          send "0\r"
+          expect "Select option:"
           send "0\r"
           expect eof
           EOF
 
-          expect /tmp/gtc-wizard-router.expect
+          expect /tmp/gtc-wizard-traversal.expect
 
-      - name: Test gtc wizard navigation
+      - name: Run gtc wizard emit-answers test
         if: runner.os == 'Linux' || runner.os == 'macOS'
         shell: bash
         run: |
-          cat >/tmp/gtc-wizard-nav.expect <<'EOF'
-          set timeout 15
-          spawn gtc wizard
+          set -euo pipefail
+
+          cat >/tmp/gtc-wizard-emit.expect <<'EOF'
+          set timeout 60
+          set pack_dir $env(WIZARD_PACK_DIR)
+          set component_dir $env(WIZARD_COMPONENT_DIR)
+          set bundle_dir $env(WIZARD_BUNDLE_DIR)
+          set answers_path $env(WIZARD_ANSWERS)
+
+          spawn gtc wizard --emit-answers $answers_path
           expect {
-            -re "Greentic|wizard|menu" {}
+            -re "Greentic Developer Wizard" {}
             timeout { exit 1 }
           }
-          send "\033\[B"
-          send "\033\[A"
-          send "q\r"
-          expect eof
+
+          expect "Select option:"
+          send "1\r"
+          expect "> "
+          send "1\r"
+          expect "Pack id"
+          expect "> "
+          send "ai.greentic.e2e.pack\r"
+          expect "Pack directory"
+          expect "> "
+          send "$pack_dir\r"
+
+          expect "> "
+          send "1\r"
+          expect "Select action"
+          expect "> "
+          send "1\r"
+          expect "Select scope"
+          expect "> "
+          send "1\r"
+          expect "Select flow type"
+          expect "> "
+          send "1\r"
+          expect "Flow name"
+          expect "> "
+          send "hello-flow\r"
+          expect "Select action"
+          expect "> "
+          send "0\r"
+
+          expect "> "
+          send "2\r"
+          expect "Select an option"
+          send "1\r"
+          expect "component name"
+          send "hello\r"
+          expect "output dir"
+          send "$component_dir\r"
+          expect "Advanced setup"
+          send "n\r"
+          expect "Select an option"
+          send "0\r"
+
+          expect "> "
+          send "M\r"
+          expect "Select option:"
+          send "2\r"
+          expect "Select number or value:"
+          send "1\r"
+          expect "Bundle name:"
+          send "e2e-bundle\r"
+          expect "Bundle id:"
+          send "ai.greentic.e2e.bundle\r"
+          expect "Output directory:"
+          send "$bundle_dir\r"
+
+          expect "Select number or value:"
+          send "1\r"
+          expect "Enter app pack reference or local path:"
+          send "$pack_dir\r"
+          expect "Select number or value:"
+          send "1\r"
+          expect "Select number or value:"
+          send "1\r"
+          expect "Select number or value:"
+          send "4\r"
+          expect "Select number or value:"
+          send "4\r"
+          expect "Select number or value:"
+          send "3\r"
+
+          expect {
+            -re "Select option:" {
+              send "0\r"
+              expect eof
+            }
+            eof {}
+            timeout { exit 1 }
+          }
           EOF
 
-          expect /tmp/gtc-wizard-nav.expect
+          expect /tmp/gtc-wizard-emit.expect
+
+          test -f "$WIZARD_ANSWERS"
+          grep -q 'ai.greentic.e2e.pack' "$WIZARD_ANSWERS"
+          grep -q 'ai.greentic.e2e.bundle' "$WIZARD_ANSWERS"
+
+      - name: Run gtc wizard answers replay test
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gtc wizard validate --answers "$WIZARD_ANSWERS"
+          rm -rf "$WIZARD_PACK_DIR" "$WIZARD_COMPONENT_DIR" "$WIZARD_BUNDLE_DIR"
+          gtc wizard apply --answers "$WIZARD_ANSWERS" --non-interactive --yes
+
+          test -d "$WIZARD_PACK_DIR"
+          test -f "$WIZARD_BUNDLE_DIR/bundle.yaml"
 
       - name: Print tenant install context
         shell: bash
@@ -176,7 +333,7 @@ jobs:
             echo "Tenant token set: no"
           fi
 
-      - name: Test gtc install --tenant
+      - name: Run gtc tenant install
         shell: bash
         env:
           GREENTIC_TENANT_TOKEN: ${{ secrets.GREENTIC_TENANT_TOKEN || secrets.GREENTIC_TENANT_KEY }}
@@ -197,7 +354,7 @@ jobs:
             exit 1
           fi
 
-      - name: Check Artifacts
+      - name: Check installed artifacts
         shell: bash
         run: |
           set -euo pipefail
