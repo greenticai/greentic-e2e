@@ -1,0 +1,12 @@
+{
+  "events-sms-twilio": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "twilio": {
+      "account_sid": "${TWILIO_ACCOUNT_SID}",
+      "auth_token": "${TWILIO_AUTH_TOKEN}",
+      "from_number": "${TWILIO_FROM_NUMBER}",
+      "webhook_path": "/webhook/twilio"
+    }
+  }
+}

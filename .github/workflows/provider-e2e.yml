@@ -1,0 +1,411 @@
+name: Provider E2E Tests
+
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  schedule:
+    - cron: '30 0 * * *'  # 30 minutes after nightly tests
+  workflow_dispatch:
+    inputs:
+      gtc_version:
+        description: 'gtc version to test'
+        default: 'latest'
+        required: false
+      provider_scope:
+        description: 'Provider scope to test'
+        default: 'dummy'
+        required: false
+        type: choice
+        options:
+          - dummy          # messaging-dummy + events-dummy (no credentials)
+          - messaging      # all messaging providers
+          - events         # all event providers
+          - all            # all providers
+
+env:
+  GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
+  PROVIDER_SCOPE: ${{ github.event.inputs.provider_scope || 'dummy' }}
+
+jobs:
+  # ==========================================================================
+  # Dummy Provider Tests (no credentials required)
+  # ==========================================================================
+  dummy-providers:
+    name: Dummy Providers (${{ matrix.label }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: Linux (x64)
+            runner: ubuntu-24.04
+          - label: macOS 15 (arm64)
+            runner: macos-15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bootstrap toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.91.0
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup toolchain install 1.91.0 --profile minimal
+          rustup default 1.91.0
+
+      - name: Install gtc CLI
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          if [[ -z "${GTC_VERSION}" || "${GTC_VERSION}" == "latest" ]]; then
+            cargo binstall -y gtc
+          else
+            cargo binstall -y "gtc@${GTC_VERSION}"
+          fi
+          gtc --version
+          gtc install
+
+      - name: Prepare test workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          echo "E2E_ROOT=${root}" >> "$GITHUB_ENV"
+          echo "E2E_BUNDLE_DIR=${root}/bundle" >> "$GITHUB_ENV"
+          mkdir -p "${root}/bundle"
+
+      - name: Create bundle with dummy providers
+        shell: bash
+        run: |
+          cat > "${E2E_BUNDLE_DIR}/greentic.demo.yaml" <<'EOF'
+          id: ai.greentic.e2e.dummy
+          name: E2E Dummy Provider Test
+          version: 0.1.0
+
+          providers:
+            messaging:
+              messaging-dummy:
+                pack: "oci://ghcr.io/greentic-biz/packs/messaging-dummy:latest"
+            events:
+              events-dummy:
+                pack: "oci://ghcr.io/greentic-biz/packs/events-dummy:latest"
+          EOF
+
+      - name: Setup providers
+        shell: bash
+        run: |
+          cat > "${E2E_ROOT}/setup-answers.json" <<'EOF'
+          {
+            "messaging-dummy": {
+              "enabled": true,
+              "channel_id": "e2e-test"
+            },
+            "events-dummy": {
+              "enabled": true,
+              "event_type": "test-event"
+            }
+          }
+          EOF
+
+          gtc setup --answers "${E2E_ROOT}/setup-answers.json" "${E2E_BUNDLE_DIR}" \
+            < /dev/null || echo "Setup exited with: $?"
+
+      - name: Start and verify services
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gtc start "${E2E_BUNDLE_DIR}" \
+            --cloudflared off \
+            --ngrok off \
+            > "${E2E_ROOT}/start.log" 2>&1 &
+          START_PID=$!
+
+          # Wait for startup (guard with max wait to avoid hanging)
+          sleep 15
+
+          if kill -0 ${START_PID} 2>/dev/null; then
+            echo "PASS: Services running (PID: ${START_PID})"
+
+            if grep -qE "demo start|listening|running" "${E2E_ROOT}/start.log" 2>/dev/null; then
+              echo "PASS: Startup indicators found"
+            else
+              echo "WARNING: No startup indicators"
+              cat "${E2E_ROOT}/start.log"
+            fi
+
+            kill -TERM ${START_PID} || true
+            wait ${START_PID} 2>/dev/null || true
+            echo "PASS: Services stopped"
+          else
+            echo "FAIL: Services exited unexpectedly"
+            cat "${E2E_ROOT}/start.log"
+            exit 1
+          fi
+
+  # ==========================================================================
+  # Messaging Provider Tests (requires secrets)
+  # ==========================================================================
+  messaging-providers:
+    name: ${{ matrix.provider }}
+    if: github.event.inputs.provider_scope == 'messaging' || github.event.inputs.provider_scope == 'all'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        provider:
+          - messaging-telegram
+          - messaging-slack
+          - messaging-teams
+          - messaging-webex
+          - messaging-whatsapp
+          - messaging-email
+          - messaging-webchat-gui
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        shell: bash
+        env:
+          PROVIDER: ${{ matrix.provider }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_APP_ID: ${{ secrets.SLACK_APP_ID }}
+          MS_BOT_APP_ID: ${{ secrets.MS_BOT_APP_ID }}
+          MS_BOT_APP_PASSWORD: ${{ secrets.MS_BOT_APP_PASSWORD }}
+          WEBEX_BOT_TOKEN: ${{ secrets.WEBEX_BOT_TOKEN }}
+          WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          MS_GRAPH_CLIENT_ID: ${{ secrets.MS_GRAPH_CLIENT_ID }}
+          MS_GRAPH_CLIENT_SECRET: ${{ secrets.MS_GRAPH_CLIENT_SECRET }}
+          WEBCHAT_JWT_SIGNING_KEY: ${{ secrets.WEBCHAT_JWT_SIGNING_KEY }}
+        run: |
+          case "$PROVIDER" in
+            messaging-telegram)
+              [[ -n "$TELEGRAM_BOT_TOKEN" ]] || { echo "Missing TELEGRAM_BOT_TOKEN"; exit 1; }
+              ;;
+            messaging-slack)
+              [[ -n "$SLACK_BOT_TOKEN" ]] || { echo "Missing SLACK_BOT_TOKEN"; exit 1; }
+              ;;
+            messaging-teams)
+              [[ -n "$MS_BOT_APP_ID" && -n "$MS_BOT_APP_PASSWORD" ]] || { echo "Missing Teams secrets"; exit 1; }
+              ;;
+            messaging-webex)
+              [[ -n "$WEBEX_BOT_TOKEN" ]] || { echo "Missing WEBEX_BOT_TOKEN"; exit 1; }
+              ;;
+            messaging-whatsapp)
+              [[ -n "$WHATSAPP_TOKEN" && -n "$WHATSAPP_PHONE_NUMBER_ID" ]] || { echo "Missing WhatsApp secrets"; exit 1; }
+              ;;
+            messaging-email)
+              [[ -n "$MS_GRAPH_CLIENT_ID" && -n "$MS_GRAPH_CLIENT_SECRET" ]] || { echo "Missing Email secrets"; exit 1; }
+              ;;
+            messaging-webchat-gui)
+              [[ -n "$WEBCHAT_JWT_SIGNING_KEY" ]] || { echo "Missing WEBCHAT_JWT_SIGNING_KEY"; exit 1; }
+              ;;
+          esac
+          echo "Required secrets present for $PROVIDER"
+
+      - name: Bootstrap toolchain
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.91.0
+          source "$HOME/.cargo/env"
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall -y gtc
+          gtc install
+
+      - name: Setup ngrok tunnel
+        uses: ngrok/ngrok-action@v1
+        with:
+          authtoken: ${{ secrets.NGROK_AUTHTOKEN }}
+          protocol: http
+          port: 8080
+        id: ngrok
+
+      - name: Prepare and run test
+        shell: bash
+        env:
+          PROVIDER: ${{ matrix.provider }}
+          PUBLIC_BASE_URL: ${{ steps.ngrok.outputs.url }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_APP_ID: ${{ secrets.SLACK_APP_ID }}
+          SLACK_CONFIGURATION_TOKEN: ${{ secrets.SLACK_CONFIGURATION_TOKEN }}
+          MS_BOT_APP_ID: ${{ secrets.MS_BOT_APP_ID }}
+          MS_BOT_APP_PASSWORD: ${{ secrets.MS_BOT_APP_PASSWORD }}
+          WEBEX_BOT_TOKEN: ${{ secrets.WEBEX_BOT_TOKEN }}
+          WHATSAPP_TOKEN: ${{ secrets.WHATSAPP_TOKEN }}
+          WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
+          WHATSAPP_VERIFY_TOKEN: ${{ secrets.WHATSAPP_VERIFY_TOKEN }}
+          EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
+          GRAPH_TENANT_ID: ${{ secrets.GRAPH_TENANT_ID }}
+          MS_GRAPH_CLIENT_ID: ${{ secrets.MS_GRAPH_CLIENT_ID }}
+          MS_GRAPH_CLIENT_SECRET: ${{ secrets.MS_GRAPH_CLIENT_SECRET }}
+          WEBCHAT_JWT_SIGNING_KEY: ${{ secrets.WEBCHAT_JWT_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+
+          ROOT="$(mktemp -d)"
+          BUNDLE_DIR="${ROOT}/bundle"
+          mkdir -p "${BUNDLE_DIR}"
+
+          # Create bundle
+          cat > "${BUNDLE_DIR}/greentic.demo.yaml" <<EOF
+          id: ai.greentic.e2e.${PROVIDER}
+          name: E2E ${PROVIDER} Test
+          version: 0.1.0
+
+          providers:
+            messaging:
+              ${PROVIDER}:
+                pack: "oci://ghcr.io/greentic-biz/packs/${PROVIDER}:latest"
+          EOF
+
+          # Create setup answers from fixture with env substitution
+          envsubst < "fixtures/setup-answers/${PROVIDER}.json" > "${ROOT}/setup-answers.json"
+
+          # Setup
+          gtc setup --answers "${ROOT}/setup-answers.json" "${BUNDLE_DIR}" \
+            < /dev/null || echo "Setup exited with: $?"
+
+          # Start
+          gtc start "${BUNDLE_DIR}" \
+            --cloudflared off \
+            --ngrok off \
+            > "${ROOT}/start.log" 2>&1 &
+          START_PID=$!
+
+          sleep 20
+
+          if kill -0 ${START_PID} 2>/dev/null; then
+            echo "PASS: ${PROVIDER} services running"
+            kill -TERM ${START_PID} || true
+            wait ${START_PID} 2>/dev/null || true
+            echo "PASS: ${PROVIDER} services stopped"
+          else
+            echo "FAIL: ${PROVIDER} services exited unexpectedly"
+            cat "${ROOT}/start.log"
+            exit 1
+          fi
+
+  # ==========================================================================
+  # Event Provider Tests (requires secrets)
+  # ==========================================================================
+  event-providers:
+    name: ${{ matrix.provider }}
+    if: github.event.inputs.provider_scope == 'events' || github.event.inputs.provider_scope == 'all'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        provider:
+          - events-webhook
+          - events-timer
+          - events-email-sendgrid
+          - events-sms-twilio
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        shell: bash
+        env:
+          PROVIDER: ${{ matrix.provider }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+        run: |
+          case "$PROVIDER" in
+            events-webhook|events-timer)
+              echo "No secrets required for $PROVIDER"
+              ;;
+            events-email-sendgrid)
+              [[ -n "$SENDGRID_API_KEY" ]] || { echo "Missing SENDGRID_API_KEY"; exit 1; }
+              ;;
+            events-sms-twilio)
+              [[ -n "$TWILIO_ACCOUNT_SID" && -n "$TWILIO_AUTH_TOKEN" ]] || { echo "Missing Twilio secrets"; exit 1; }
+              ;;
+          esac
+
+      - name: Bootstrap toolchain
+        shell: bash
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.91.0
+          source "$HOME/.cargo/env"
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          cargo binstall -y gtc
+          gtc install
+
+      - name: Setup ngrok tunnel
+        if: matrix.provider != 'events-timer'
+        uses: ngrok/ngrok-action@v1
+        with:
+          authtoken: ${{ secrets.NGROK_AUTHTOKEN }}
+          protocol: http
+          port: 8080
+        id: ngrok
+
+      - name: Prepare and run test
+        shell: bash
+        env:
+          PROVIDER: ${{ matrix.provider }}
+          PUBLIC_BASE_URL: ${{ steps.ngrok.outputs.url || 'http://localhost:8080' }}
+          SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
+          SENDGRID_FROM_EMAIL: ${{ secrets.SENDGRID_FROM_EMAIL }}
+          TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
+          TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
+          TWILIO_FROM_NUMBER: ${{ secrets.TWILIO_FROM_NUMBER }}
+        run: |
+          set -euo pipefail
+
+          ROOT="$(mktemp -d)"
+          BUNDLE_DIR="${ROOT}/bundle"
+          mkdir -p "${BUNDLE_DIR}"
+
+          # Create bundle
+          cat > "${BUNDLE_DIR}/greentic.demo.yaml" <<EOF
+          id: ai.greentic.e2e.${PROVIDER}
+          name: E2E ${PROVIDER} Test
+          version: 0.1.0
+
+          providers:
+            events:
+              ${PROVIDER}:
+                pack: "oci://ghcr.io/greentic-biz/packs/${PROVIDER}:latest"
+          EOF
+
+          # Create setup answers from fixture with env substitution
+          envsubst < "fixtures/setup-answers/${PROVIDER}.json" > "${ROOT}/setup-answers.json"
+
+          # Setup
+          gtc setup --answers "${ROOT}/setup-answers.json" "${BUNDLE_DIR}" \
+            < /dev/null || echo "Setup exited with: $?"
+
+          # Start
+          gtc start "${BUNDLE_DIR}" \
+            --cloudflared off \
+            --ngrok off \
+            > "${ROOT}/start.log" 2>&1 &
+          START_PID=$!
+
+          sleep 20
+
+          if kill -0 ${START_PID} 2>/dev/null; then
+            echo "PASS: ${PROVIDER} services running"
+            kill -TERM ${START_PID} || true
+            wait ${START_PID} 2>/dev/null || true
+            echo "PASS: ${PROVIDER} services stopped"
+          else
+            echo "FAIL: ${PROVIDER} services exited unexpectedly"
+            cat "${ROOT}/start.log"
+            exit 1
+          fi

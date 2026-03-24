@@ -1,0 +1,9 @@
+{
+  "events-email-sendgrid": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "sendgrid_api_key": "${SENDGRID_API_KEY}",
+    "from_email": "${SENDGRID_FROM_EMAIL}",
+    "from_name": "E2E Test"
+  }
+}

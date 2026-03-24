@@ -1,0 +1,10 @@
+{
+  "events-webhook": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "webhook": {
+      "path": "/webhook/events",
+      "topic_prefix": "webhook.e2e"
+    }
+  }
+}

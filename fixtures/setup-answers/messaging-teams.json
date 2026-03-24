@@ -1,0 +1,10 @@
+{
+  "messaging-teams": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "ms_bot_app_id": "${MS_BOT_APP_ID}",
+    "ms_bot_app_password": "${MS_BOT_APP_PASSWORD}",
+    "team_id": "",
+    "channel_id": ""
+  }
+}

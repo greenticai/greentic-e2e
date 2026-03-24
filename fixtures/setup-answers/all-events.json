@@ -1,0 +1,39 @@
+{
+  "events-dummy": {
+    "enabled": true,
+    "event_type": "test-event"
+  },
+  "events-webhook": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "webhook": {
+      "path": "/webhook/events",
+      "topic_prefix": "webhook.e2e"
+    }
+  },
+  "events-timer": {
+    "enabled": true,
+    "schedules": [
+      {
+        "name": "e2e-test-timer",
+        "cron": "*/5 * * * *",
+        "topic": "timer.e2e.test"
+      }
+    ]
+  },
+  "events-email-sendgrid": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "sendgrid_api_key": "${SENDGRID_API_KEY}",
+    "from_email": "${SENDGRID_FROM_EMAIL}"
+  },
+  "events-sms-twilio": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "twilio": {
+      "account_sid": "${TWILIO_ACCOUNT_SID}",
+      "auth_token": "${TWILIO_AUTH_TOKEN}",
+      "from_number": "${TWILIO_FROM_NUMBER}"
+    }
+  }
+}

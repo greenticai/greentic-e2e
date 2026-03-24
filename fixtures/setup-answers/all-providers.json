@@ -1,0 +1,94 @@
+{
+  "_comment": "Combined setup answers for all providers. Replace ${VAR} with actual values.",
+
+  "messaging-dummy": {
+    "enabled": true,
+    "channel_id": "e2e-test-channel"
+  },
+  "messaging-telegram": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "api_base_url": "https://api.telegram.org",
+    "telegram_bot_token": "${TELEGRAM_BOT_TOKEN}"
+  },
+  "messaging-slack": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "api_base_url": "https://slack.com/api",
+    "slack_bot_token": "${SLACK_BOT_TOKEN}",
+    "slack_app_id": "${SLACK_APP_ID}",
+    "slack_configuration_token": "${SLACK_CONFIGURATION_TOKEN}"
+  },
+  "messaging-teams": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "ms_bot_app_id": "${MS_BOT_APP_ID}",
+    "ms_bot_app_password": "${MS_BOT_APP_PASSWORD}"
+  },
+  "messaging-webex": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "api_base_url": "https://webexapis.com/v1",
+    "webex_bot_token": "${WEBEX_BOT_TOKEN}"
+  },
+  "messaging-whatsapp": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "api_base_url": "https://graph.facebook.com",
+    "api_version": "v17.0",
+    "phone_number_id": "${WHATSAPP_PHONE_NUMBER_ID}",
+    "whatsapp_token": "${WHATSAPP_TOKEN}",
+    "whatsapp_verify_token": "${WHATSAPP_VERIFY_TOKEN}"
+  },
+  "messaging-email": {
+    "enabled": true,
+    "from_address": "${EMAIL_FROM_ADDRESS}",
+    "graph_tenant_id": "${GRAPH_TENANT_ID}",
+    "ms_graph_client_id": "${MS_GRAPH_CLIENT_ID}",
+    "ms_graph_client_secret": "${MS_GRAPH_CLIENT_SECRET}"
+  },
+  "messaging-webchat-gui": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "mode": "directline",
+    "jwt_signing_key": "${WEBCHAT_JWT_SIGNING_KEY}"
+  },
+
+  "events-dummy": {
+    "enabled": true,
+    "event_type": "test-event"
+  },
+  "events-webhook": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "webhook": {
+      "path": "/webhook/events",
+      "topic_prefix": "webhook.e2e"
+    }
+  },
+  "events-timer": {
+    "enabled": true,
+    "schedules": [
+      {
+        "name": "e2e-test-timer",
+        "cron": "*/5 * * * *",
+        "topic": "timer.e2e.test"
+      }
+    ]
+  },
+  "events-email-sendgrid": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "sendgrid_api_key": "${SENDGRID_API_KEY}",
+    "from_email": "${SENDGRID_FROM_EMAIL}"
+  },
+  "events-sms-twilio": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "twilio": {
+      "account_sid": "${TWILIO_ACCOUNT_SID}",
+      "auth_token": "${TWILIO_AUTH_TOKEN}",
+      "from_number": "${TWILIO_FROM_NUMBER}"
+    }
+  }
+}

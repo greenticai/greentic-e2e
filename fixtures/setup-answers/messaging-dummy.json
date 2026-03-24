@@ -1,0 +1,7 @@
+{
+  "messaging-dummy": {
+    "enabled": true,
+    "channel_id": "e2e-test-channel",
+    "response_delay_ms": 0
+  }
+}
