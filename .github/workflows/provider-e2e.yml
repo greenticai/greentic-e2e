@@ -232,19 +232,11 @@ jobs:
           cargo binstall -y gtc
           gtc install
 
-      - name: Setup ngrok tunnel
-        uses: ngrok/ngrok-action@v1
-        with:
-          authtoken: ${{ secrets.NGROK_AUTHTOKEN }}
-          protocol: http
-          port: 8080
-        id: ngrok
-
       - name: Prepare and run test
         shell: bash
         env:
           PROVIDER: ${{ matrix.provider }}
-          PUBLIC_BASE_URL: ${{ steps.ngrok.outputs.url }}
+          PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL || 'http://localhost:8080' }}
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_APP_ID: ${{ secrets.SLACK_APP_ID }}
@@ -361,20 +353,11 @@ jobs:
           cargo binstall -y gtc
           gtc install
 
-      - name: Setup ngrok tunnel
-        if: matrix.provider != 'events-timer'
-        uses: ngrok/ngrok-action@v1
-        with:
-          authtoken: ${{ secrets.NGROK_AUTHTOKEN }}
-          protocol: http
-          port: 8080
-        id: ngrok
-
       - name: Prepare and run test
         shell: bash
         env:
           PROVIDER: ${{ matrix.provider }}
-          PUBLIC_BASE_URL: ${{ steps.ngrok.outputs.url || 'http://localhost:8080' }}
+          PUBLIC_BASE_URL: ${{ secrets.PUBLIC_BASE_URL || 'http://localhost:8080' }}
           SENDGRID_API_KEY: ${{ secrets.SENDGRID_API_KEY }}
           SENDGRID_FROM_EMAIL: ${{ secrets.SENDGRID_FROM_EMAIL }}
           TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
