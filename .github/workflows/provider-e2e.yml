@@ -1,6 +1,10 @@
 name: Provider E2E Tests
 
 on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
   schedule:
     - cron: '30 0 * * *'  # 30 minutes after nightly tests
   workflow_dispatch:
