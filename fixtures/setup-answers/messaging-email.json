@@ -1,0 +1,11 @@
+{
+  "messaging-email": {
+    "enabled": true,
+    "from_address": "${EMAIL_FROM_ADDRESS}",
+    "graph_tenant_id": "${GRAPH_TENANT_ID}",
+    "ms_graph_client_id": "${MS_GRAPH_CLIENT_ID}",
+    "ms_graph_client_secret": "${MS_GRAPH_CLIENT_SECRET}",
+    "ms_graph_refresh_token": "${MS_GRAPH_REFRESH_TOKEN}",
+    "public_base_url": "${PUBLIC_BASE_URL}"
+  }
+}

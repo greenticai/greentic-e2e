@@ -1,0 +1,12 @@
+{
+  "messaging-whatsapp": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "api_base_url": "https://graph.facebook.com",
+    "api_version": "v17.0",
+    "phone_number_id": "${WHATSAPP_PHONE_NUMBER_ID}",
+    "business_account_id": "${WHATSAPP_BUSINESS_ACCOUNT_ID}",
+    "whatsapp_token": "${WHATSAPP_TOKEN}",
+    "whatsapp_verify_token": "${WHATSAPP_VERIFY_TOKEN}"
+  }
+}

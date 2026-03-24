@@ -1,0 +1,13 @@
+{
+  "selected_action": "bundle",
+  "bundle": {
+    "name": "e2e-provider-bundle",
+    "id": "ai.greentic.e2e.provider-bundle",
+    "output_dir": "/tmp/e2e-provider-bundle"
+  },
+  "providers": {
+    "messaging": ["messaging-dummy"],
+    "events": ["events-dummy"]
+  },
+  "apps": []
+}

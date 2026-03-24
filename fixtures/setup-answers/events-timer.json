@@ -1,0 +1,12 @@
+{
+  "events-timer": {
+    "enabled": true,
+    "schedules": [
+      {
+        "name": "e2e-test-timer",
+        "cron": "*/5 * * * *",
+        "topic": "timer.e2e.test"
+      }
+    ]
+  }
+}

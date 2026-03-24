@@ -1,0 +1,27 @@
+# E2E Test Bundle Configuration
+# This bundle uses dummy providers that don't require external credentials
+
+id: ai.greentic.e2e.providers
+name: E2E Provider Test Bundle
+version: 0.1.0
+description: Bundle for testing messaging and event provider lifecycle
+
+# Providers configuration
+providers:
+  messaging:
+    - provider: messaging-dummy
+      enabled: true
+      config:
+        channel_id: e2e-test-channel
+
+  events:
+    - provider: events-dummy
+      enabled: true
+      config:
+        event_type: test-event
+
+# Application pack (minimal)
+apps:
+  - id: e2e-test-app
+    name: E2E Test App
+    entry_flow: on_message

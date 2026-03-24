@@ -1,0 +1,11 @@
+{
+  "messaging-webchat-gui": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "mode": "directline",
+    "jwt_signing_key": "${WEBCHAT_JWT_SIGNING_KEY}",
+    "route": "/webchat",
+    "tenant_channel_id": "",
+    "base_url": ""
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "messaging-telegram": {
+    "enabled": true,
+    "public_base_url": "${PUBLIC_BASE_URL}",
+    "api_base_url": "https://api.telegram.org",
+    "telegram_bot_token": "${TELEGRAM_BOT_TOKEN}",
+    "default_chat_id": ""
+  }
+}
