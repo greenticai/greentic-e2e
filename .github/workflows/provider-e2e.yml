@@ -1,12 +1,11 @@
 name: Provider E2E Tests
 
 on:
-  push:
-    branches: [develop, main]
-  pull_request:
-    branches: [develop, main]
+  # Triggered from greentic-messaging-providers or other repos via API
+  repository_dispatch:
+    types: [provider-e2e]
   schedule:
-    - cron: '30 0 * * *'  # 30 minutes after nightly tests
+    - cron: '30 0 * * *'  # nightly
   workflow_dispatch:
     inputs:
       gtc_version:
@@ -15,7 +14,7 @@ on:
         required: false
       provider_scope:
         description: 'Provider scope to test'
-        default: 'dummy'
+        default: 'all'
         required: false
         type: choice
         options:
@@ -24,9 +23,10 @@ on:
           - events         # all event providers
           - all            # all providers
 
+# Inputs come from workflow_dispatch or repository_dispatch client_payload
 env:
-  GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
-  PROVIDER_SCOPE: ${{ github.event.inputs.provider_scope || 'dummy' }}
+  GTC_VERSION: ${{ github.event.inputs.gtc_version || github.event.client_payload.gtc_version || 'latest' }}
+  PROVIDER_SCOPE: ${{ github.event.inputs.provider_scope || github.event.client_payload.provider_scope || 'all' }}
 
 jobs:
   # ==========================================================================
@@ -154,7 +154,11 @@ jobs:
   # ==========================================================================
   messaging-providers:
     name: ${{ matrix.provider }}
-    if: github.event.inputs.provider_scope == 'messaging' || github.event.inputs.provider_scope == 'all'
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'repository_dispatch' ||
+      github.event.inputs.provider_scope == 'messaging' ||
+      github.event.inputs.provider_scope == 'all'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
@@ -301,7 +305,11 @@ jobs:
   # ==========================================================================
   event-providers:
     name: ${{ matrix.provider }}
-    if: github.event.inputs.provider_scope == 'events' || github.event.inputs.provider_scope == 'all'
+    if: >-
+      github.event_name == 'schedule' ||
+      github.event_name == 'repository_dispatch' ||
+      github.event.inputs.provider_scope == 'events' ||
+      github.event.inputs.provider_scope == 'all'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     strategy:
