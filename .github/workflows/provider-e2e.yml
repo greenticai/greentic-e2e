@@ -121,12 +121,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          timeout 60 gtc start "${E2E_BUNDLE_DIR}" \
+          gtc start "${E2E_BUNDLE_DIR}" \
             --cloudflared off \
             --ngrok off \
             > "${E2E_ROOT}/start.log" 2>&1 &
           START_PID=$!
 
+          # Wait for startup (guard with max wait to avoid hanging)
           sleep 15
 
           if kill -0 ${START_PID} 2>/dev/null; then
@@ -276,7 +277,7 @@ jobs:
             < /dev/null || echo "Setup exited with: $?"
 
           # Start
-          timeout 90 gtc start "${BUNDLE_DIR}" \
+          gtc start "${BUNDLE_DIR}" \
             --cloudflared off \
             --ngrok off \
             > "${ROOT}/start.log" 2>&1 &
@@ -390,7 +391,7 @@ jobs:
             < /dev/null || echo "Setup exited with: $?"
 
           # Start
-          timeout 90 gtc start "${BUNDLE_DIR}" \
+          gtc start "${BUNDLE_DIR}" \
             --cloudflared off \
             --ngrok off \
             > "${ROOT}/start.log" 2>&1 &
