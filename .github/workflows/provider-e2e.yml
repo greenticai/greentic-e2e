@@ -27,6 +27,9 @@ on:
           - events         # all event providers
           - all            # all providers
 
+permissions:
+  contents: read
+
 # Inputs come from workflow_dispatch or repository_dispatch client_payload
 env:
   GTC_VERSION: ${{ github.event.inputs.gtc_version || github.event.client_payload.gtc_version || 'latest' }}
