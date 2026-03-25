@@ -324,48 +324,107 @@ if [[ "$SKIP_START" != "true" ]]; then
     START_PID=$!
     log "Started gtc (PID: ${START_PID})"
 
-    # Wait for startup
-    log "Waiting for services to start..."
-    sleep 15
+    # Wait for HTTP endpoint to be ready
+    log "Waiting for HTTP endpoint..."
+    HTTP_READY=false
+    for i in $(seq 1 30); do
+      if curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1 || \
+         curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ 2>/dev/null | grep -qE "^[2-4]"; then
+        log "PASS: HTTP endpoint ready after ${i}s"
+        HTTP_READY=true
+        break
+      fi
+      sleep 1
+    done
+
+    if [[ "$HTTP_READY" != "true" ]]; then
+      log "Warning: HTTP endpoint not responding after 30s"
+      if [[ "$VERBOSE" == "true" ]]; then
+        cat "${E2E_LOG}" 2>/dev/null || true
+      fi
+    fi
+
+    # Extra settle time
+    sleep 3
 
     ###########################################################################
-    # Step 4: Verify services
+    # Step 4: Verify services are running
     ###########################################################################
     log ""
     log "Step 4: Verifying services..."
 
     if kill -0 "${START_PID}" 2>/dev/null; then
       log "PASS: gtc start is running (PID: ${START_PID})"
-
-      # Check log for startup indicators
-      if grep -qE "listening|started|ready|bound|[Rr]unning|demo start|press Ctrl" "${E2E_LOG}" 2>/dev/null; then
-        log "PASS: Services appear to be running successfully"
-      else
-        log "Warning: No startup indicators found in log"
-        if [[ "$VERBOSE" == "true" ]]; then
-          log "Log contents:"
-          cat "${E2E_LOG}" 2>/dev/null || log "(empty log)"
-        fi
-      fi
     else
       log "FAIL: gtc start exited unexpectedly"
-      log "Log contents:"
       cat "${E2E_LOG}" 2>/dev/null || log "(no log file)"
-    fi
-
-    # Check state directory
-    STATE_DIR="${HOME}/.greentic/state"
-    if [[ -d "${STATE_DIR}" ]]; then
-      PID_COUNT=$(find "${STATE_DIR}" -name "*.pid" -type f 2>/dev/null | wc -l | tr -d ' ')
-      log "Found ${PID_COUNT} PID file(s) in state directory"
+      exit 1
     fi
 
     ###########################################################################
-    # Step 5: Stop test
+    # Step 5: Test HTTP ingress (full cycle)
+    ###########################################################################
+    log ""
+    log "Step 5: Testing HTTP ingress..."
+
+    # Test messaging-dummy ingress
+    if [[ -n "$MESSAGING_PROVIDERS" ]]; then
+      for provider in $MESSAGING_PROVIDERS; do
+        provider=$(echo "$provider" | xargs)
+        [[ -z "$provider" ]] && continue
+        log "Sending test message to ${provider}..."
+
+        RESPONSE=$(curl -s -w "\n%{http_code}" \
+          -X POST "http://127.0.0.1:8080/v1/messaging/ingress/${provider}/demo/default" \
+          -H "Content-Type: application/json" \
+          -d '{"text": "e2e test message", "from": {"id": "e2e-tester", "name": "E2E"}}' \
+          2>&1) || true
+
+        HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+        BODY=$(echo "$RESPONSE" | sed '$d')
+
+        log "  HTTP ${HTTP_CODE}: ${BODY}"
+
+        if [[ "$HTTP_CODE" =~ ^[2-4][0-9][0-9]$ ]]; then
+          log "PASS: ${provider} ingress responded with ${HTTP_CODE}"
+        else
+          log "FAIL: ${provider} ingress failed with ${HTTP_CODE}"
+        fi
+      done
+    fi
+
+    # Test events ingress
+    if [[ -n "$EVENT_PROVIDERS" ]]; then
+      for provider in $EVENT_PROVIDERS; do
+        provider=$(echo "$provider" | xargs)
+        [[ -z "$provider" ]] && continue
+        log "Sending test event to ${provider}..."
+
+        RESPONSE=$(curl -s -w "\n%{http_code}" \
+          -X POST "http://127.0.0.1:8080/v1/events/ingress/${provider}/demo/default" \
+          -H "Content-Type: application/json" \
+          -d '{"event_type": "e2e.test", "data": {"message": "hello from e2e"}}' \
+          2>&1) || true
+
+        HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+        BODY=$(echo "$RESPONSE" | sed '$d')
+
+        log "  HTTP ${HTTP_CODE}: ${BODY}"
+
+        if [[ "$HTTP_CODE" =~ ^[2-4][0-9][0-9]$ ]]; then
+          log "PASS: ${provider} ingress responded with ${HTTP_CODE}"
+        else
+          log "FAIL: ${provider} ingress failed with ${HTTP_CODE}"
+        fi
+      done
+    fi
+
+    ###########################################################################
+    # Step 6: Stop test
     ###########################################################################
     if [[ "$KEEP_RUNNING" != "true" ]]; then
       log ""
-      log "Step 5: Testing service stop..."
+      log "Step 6: Testing service stop..."
 
       if [[ -n "${START_PID}" ]] && kill -0 "${START_PID}" 2>/dev/null; then
         kill -TERM "${START_PID}" 2>/dev/null || true
@@ -380,15 +439,13 @@ if [[ "$SKIP_START" != "true" ]]; then
       fi
 
       log "PASS: Services stopped successfully"
-      # Clear PID so cleanup doesn't try again
       START_PID=""
     else
       log ""
-      log "Step 5: Keeping services running (--keep-running)"
+      log "Step 6: Keeping services running (--keep-running)"
       log "Bundle: ${E2E_BUNDLE_DIR}"
       log "Log: ${E2E_LOG}"
       log "PID: ${START_PID}"
-      # Prevent cleanup
       trap - EXIT
     fi
   fi
