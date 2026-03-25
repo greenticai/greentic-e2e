@@ -27,7 +27,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURES_DIR="${ROOT_DIR}/fixtures"
-SECRETS_FILE="${ROOT_DIR}/.secrets-providers"
+SECRETS_FILE="${ROOT_DIR}/.secrets-provider"
 
 # All available providers
 ALL_MESSAGING="messaging-dummy messaging-telegram messaging-slack messaging-teams messaging-webex messaging-whatsapp messaging-email messaging-webchat"
@@ -217,7 +217,7 @@ cleanup() {
 trap cleanup EXIT
 
 ###############################################################################
-# Load secrets from .secrets-providers if available
+# Load secrets from .secrets-provider if available
 ###############################################################################
 if [[ -f "$SECRETS_FILE" ]]; then
   log "Loading secrets from ${SECRETS_FILE}"
@@ -226,7 +226,7 @@ if [[ -f "$SECRETS_FILE" ]]; then
   source "$SECRETS_FILE"
   set +a
 else
-  log_verbose "No .secrets-providers file found, using environment variables"
+  log_verbose "No .secrets-provider file found, using environment variables"
 fi
 
 ###############################################################################

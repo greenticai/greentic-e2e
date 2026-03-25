@@ -39,7 +39,7 @@ End-to-end tests for the Greentic CLI (`gtc`) covering:
 ### Nightly Tests (with Docker/Act)
 
 ```bash
-# Prerequisites: Docker + .secrets file
+# Prerequisites: Docker + .secrets-provider file
 ./ci/run_actions.sh
 ACT_MATRIX_ARCH=arm64 ./ci/run_actions.sh
 ```
@@ -167,11 +167,11 @@ TWILIO_FROM_NUMBER
 
 ### Local Testing
 
-Copy `.secrets-providers.example` to `.secrets-providers` and fill in values:
+Copy `.secrets-provider.example` to `.secrets-provider` and fill in the values you need:
 
 ```bash
-cp .secrets-providers.example .secrets-providers
-# Edit .secrets-providers with your credentials
+cp .secrets-provider.example .secrets-provider
+# Edit .secrets-provider with your credentials
 ```
 
 ## GTC Commands Tested
@@ -207,7 +207,7 @@ provider_scope: dummy | messaging | events | all
 1. Create fixture: `fixtures/setup-answers/<provider>.json`
 2. Add to workflow matrix in `provider-e2e.yml`
 3. Add required secrets check
-4. Update `.secrets-providers.example`
+4. Update `.secrets-provider.example`
 
 Example fixture format:
 ```json

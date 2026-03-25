@@ -1,0 +1,25 @@
+{
+  "wizard_id": "greentic-bundle.wizard.run",
+  "schema_id": "greentic-bundle.wizard.answers",
+  "schema_version": "1.0.0",
+  "locale": "en",
+  "locks": {},
+  "answers": {
+    "selected_action": "bundle",
+    "bundle": {
+      "name": "__WIZARD_BUNDLE_NAME__",
+      "id": "__WIZARD_BUNDLE_ID__",
+      "output_dir": "__WIZARD_BUNDLE_DIR__"
+    },
+    "apps": [
+      {
+        "source": "__WIZARD_PACK_DIR__",
+        "selected_flows": "all"
+      }
+    ],
+    "providers": {
+      "messaging": [],
+      "events": []
+    }
+  }
+}

@@ -16,7 +16,7 @@ ACT_MATRIX_OS="${ACT_MATRIX_OS:-linux}"
 ACT_MATRIX_ARCH="${ACT_MATRIX_ARCH:-x64}"
 ACT_DOCKER_CONTEXT="${ACT_DOCKER_CONTEXT:-}"
 ACT_DOCKER_HOST="${ACT_DOCKER_HOST:-}"
-ACT_SECRET_FILE="${ACT_SECRET_FILE:-${ROOT_DIR}/.secrets}"
+ACT_SECRET_FILE="${ACT_SECRET_FILE:-${ROOT_DIR}/.secrets-provider}"
 ACT_PLATFORM_IMAGE="${ACT_PLATFORM_IMAGE:-catthehacker/ubuntu:act-24.04}"
 ACT_PULL="${ACT_PULL:-false}"
 
@@ -123,6 +123,11 @@ install_act() {
   rm -f "$INSTALLER"
 }
 
+act_usable() {
+  [[ -x "$ACT_BIN" ]] || return 1
+  "$ACT_BIN" --version >/dev/null 2>&1
+}
+
 check_docker() {
   require_cmd docker
 
@@ -139,8 +144,9 @@ check_docker() {
   die "Docker is required to run GitHub Actions locally with act. The configured daemon ${docker_host} is not reachable. Set ACT_DOCKER_CONTEXT or ACT_DOCKER_HOST to a running Docker daemon and rerun ci/run_actions.sh."
 }
 
-if [[ ! -x "$ACT_BIN" ]]; then
+if ! act_usable; then
   require_cmd curl
+  rm -f "$ACT_BIN"
   install_act
 fi
 
