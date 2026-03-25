@@ -1,6 +1,5 @@
 .idea/
-.secrets
-.secrets-providers
+.secrets-provider
 
 # OS
 .DS_Store

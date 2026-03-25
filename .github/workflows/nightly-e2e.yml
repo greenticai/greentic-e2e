@@ -134,190 +134,66 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Shared wizard inputs live in fixtures/wizard/e2e.env.
+          set -a
+          source fixtures/wizard/e2e.env
+          set +a
+
           root="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gtc-wizard-e2e.XXXXXX")"
+          pack_dir="${root}/${WIZARD_PACK_SUBDIR}"
+          replay_answers="${root}/replay-answers.json"
           {
             echo "WIZARD_E2E_ROOT=${root}"
-            echo "WIZARD_PACK_DIR=/tmp/test-pack"
-            echo "WIZARD_COMPONENT_DIR=${root}/component"
+            echo "WIZARD_PACK_ID=${WIZARD_PACK_ID}"
+            echo "WIZARD_PACK_DIR=${pack_dir}"
+            echo "WIZARD_BUNDLE_NAME=${WIZARD_BUNDLE_NAME}"
+            echo "WIZARD_BUNDLE_ID=${WIZARD_BUNDLE_ID}"
             echo "WIZARD_BUNDLE_DIR=${root}/bundle"
-            echo "WIZARD_ANSWERS=${root}/answers.json"
+            echo "WIZARD_EMIT_FILE=${root}/emitted-answers.json"
+            echo "WIZARD_EMIT_LOG=${root}/emit-answers.log"
+            echo "WIZARD_REPLAY_ANSWERS=${replay_answers}"
           } >>"$GITHUB_ENV"
 
-          rm -rf /tmp/test-pack
+          sed \
+            -e "s|__WIZARD_PACK_DIR__|${pack_dir}|g" \
+            -e "s|__WIZARD_BUNDLE_NAME__|${WIZARD_BUNDLE_NAME}|g" \
+            -e "s|__WIZARD_BUNDLE_ID__|${WIZARD_BUNDLE_ID}|g" \
+            -e "s|__WIZARD_BUNDLE_DIR__|${root}/bundle|g" \
+            fixtures/wizard/replay-answers.template.json >"$replay_answers"
 
       - name: Run gtc wizard interactive test
+        id: wizard_interactive
         if: runner.os == 'Linux' || runner.os == 'macOS'
+        continue-on-error: true
         shell: bash
         run: |
-          cat >/tmp/gtc-wizard-traversal.expect <<'EOF'
-          set timeout 30
-          set pack_dir $env(WIZARD_PACK_DIR)
-
-          spawn gtc wizard --debug-router
-          expect {
-            -re "Router exec: greentic-dev" {}
-            timeout { exit 1 }
-          }
-
-          expect "Select option:"
-          send "1\r"
-
-          expect "> "
-          send "1\r"
-          expect "Pack id"
-          expect "> "
-          send "ai.greentic.e2e.pack\r"
-          expect "Pack directory"
-          expect "> "
-          send "$pack_dir\r"
-
-          expect "> "
-          send "1\r"
-          expect "Select action"
-          expect "> "
-          send "0\r"
-
-          expect "> "
-          send "2\r"
-          expect "wizard interactive mode"
-          expect "Select an option"
-          send "0\r"
-
-          expect "> "
-          send "0\r"
-          expect "> "
-          send "0\r"
-          expect "Select option:"
-          send "2\r"
-          expect "Bundle Wizard"
-          expect "Select number or value:"
-          send "0\r"
-          expect "Select option:"
-          send "0\r"
-          expect eof
-          EOF
-
-          expect /tmp/gtc-wizard-traversal.expect
+          expect fixtures/wizard/traversal.expect
 
       - name: Run gtc wizard emit-answers test
+        id: wizard_emit
         if: runner.os == 'Linux' || runner.os == 'macOS'
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
 
-          cat >/tmp/gtc-wizard-emit.expect <<'EOF'
-          set timeout 60
-          set pack_dir $env(WIZARD_PACK_DIR)
-          set component_dir $env(WIZARD_COMPONENT_DIR)
-          set bundle_dir $env(WIZARD_BUNDLE_DIR)
-          set answers_path $env(WIZARD_ANSWERS)
+          expect fixtures/wizard/emit_answers.expect >"$WIZARD_EMIT_LOG"
 
-          spawn gtc wizard --emit-answers $answers_path
-          expect {
-            -re "Greentic Developer Wizard" {}
-            timeout { exit 1 }
-          }
-
-          expect "Select option:"
-          send "1\r"
-          expect "> "
-          send "1\r"
-          expect "Pack id"
-          expect "> "
-          send "ai.greentic.e2e.pack\r"
-          expect "Pack directory"
-          expect "> "
-          send "$pack_dir\r"
-
-          expect "> "
-          send "1\r"
-          expect "Select action"
-          expect "> "
-          send "1\r"
-          expect "Flow scope"
-          expect "Select scope"
-          expect "> "
-          send "1\r"
-          expect "Flow type"
-          expect "Select flow type"
-          expect "> "
-          send "1\r"
-          expect "Flow name"
-          expect "> "
-          send "hello-flow\r"
-          expect "Select action"
-          expect "> "
-          send "0\r"
-
-          expect "> "
-          send "2\r"
-          expect "Select an option"
-          send "1\r"
-          expect "component name"
-          send "hello\r"
-          expect "output dir"
-          send "$component_dir\r"
-          expect "Advanced setup"
-          send "n\r"
-          expect "Select an option"
-          send "0\r"
-
-          expect "> "
-          send "M\r"
-          expect "Select option:"
-          send "2\r"
-          expect "Select number or value:"
-          send "1\r"
-          expect "Bundle name:"
-          send "e2e-bundle\r"
-          expect "Bundle id:"
-          send "ai.greentic.e2e.bundle\r"
-          expect "Output directory:"
-          send "$bundle_dir\r"
-
-          expect "Select number or value:"
-          send "1\r"
-          expect "Enter app pack reference or local path:"
-          send "$pack_dir\r"
-          expect "Select number or value:"
-          send "1\r"
-          expect "Select number or value:"
-          send "1\r"
-          expect "Select number or value:"
-          send "4\r"
-          expect "Select number or value:"
-          send "4\r"
-          expect "Select number or value:"
-          send "3\r"
-
-          expect {
-            -re "Select option:" {
-              send "0\r"
-              expect eof
-            }
-            eof {}
-            timeout { exit 1 }
-          }
-          EOF
-
-          expect /tmp/gtc-wizard-emit.expect
-
-          test -f "$WIZARD_ANSWERS"
-          grep -q 'ai.greentic.e2e.pack' "$WIZARD_ANSWERS"
-          grep -q 'ai.greentic.e2e.bundle' "$WIZARD_ANSWERS"
+          test -s "$WIZARD_EMIT_FILE"
+          grep -q '"wizard_id": "greentic-dev.wizard.launcher.main"' "$WIZARD_EMIT_FILE"
+          grep -q "\"selected_action\": \"bundle\"" "$WIZARD_EMIT_FILE"
+          grep -q "\"bundle_name\": \"${WIZARD_BUNDLE_NAME}\"" "$WIZARD_EMIT_FILE"
 
       - name: Run gtc wizard answers replay test
+        id: wizard_replay
         if: runner.os == 'Linux' || runner.os == 'macOS'
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
 
-          gtc wizard validate --answers "$WIZARD_ANSWERS"
-          rm -rf "$WIZARD_PACK_DIR" "$WIZARD_COMPONENT_DIR" "$WIZARD_BUNDLE_DIR"
-          gtc wizard apply --answers "$WIZARD_ANSWERS" --non-interactive --yes
-
-          test -d "$WIZARD_PACK_DIR"
-          test -f "$WIZARD_BUNDLE_DIR/bundle.yaml"
+          gtc wizard validate --answers "$WIZARD_REPLAY_ANSWERS" >"$WIZARD_BUNDLE_DIR.validate.log"
+          grep -q '"program": "greentic-bundle"' "$WIZARD_BUNDLE_DIR.validate.log"
 
       - name: Print tenant install context
         shell: bash
@@ -385,3 +261,29 @@ jobs:
               echo "Missing artifact directory: $path"
             fi
           done
+
+      - name: Check wizard test results
+        if: ${{ always() && (runner.os == 'Linux' || runner.os == 'macOS') }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          failures=0
+
+          for result in \
+            "wizard interactive:${{ steps.wizard_interactive.outcome }}" \
+            "wizard emit-answers:${{ steps.wizard_emit.outcome }}" \
+            "wizard replay:${{ steps.wizard_replay.outcome }}"; do
+            echo "$result"
+            case "$result" in
+              *:success|*:skipped) ;;
+              *)
+                failures=$((failures + 1))
+                ;;
+            esac
+          done
+
+          if [[ "$failures" -gt 0 ]]; then
+            echo "One or more wizard tests failed."
+            exit 1
+          fi

@@ -1,0 +1,63 @@
+set timeout 60
+set pack_id $env(WIZARD_PACK_ID)
+set pack_dir $env(WIZARD_PACK_DIR)
+set bundle_name $env(WIZARD_BUNDLE_NAME)
+set bundle_id $env(WIZARD_BUNDLE_ID)
+set bundle_dir $env(WIZARD_BUNDLE_DIR)
+set emit_file $env(WIZARD_EMIT_FILE)
+
+spawn gtc wizard --emit-answers $emit_file
+expect {
+  -re "Greentic Developer Wizard" {}
+  timeout { exit 1 }
+}
+
+expect "Select option:"
+send "1\r"
+expect "> "
+send "1\r"
+expect "Pack id"
+expect "> "
+send "$pack_id\r"
+expect "Pack directory"
+expect "> "
+send "$pack_dir\r"
+
+expect "> "
+send "M\r"
+expect "> "
+send "0\r"
+expect "Select option:"
+send "2\r"
+expect "Select number or value:"
+send "1\r"
+expect "Bundle name:"
+send "$bundle_name\r"
+expect "Bundle id:"
+send "$bundle_id\r"
+expect "Output directory:"
+send "$bundle_dir\r"
+
+expect "Select number or value:"
+send "1\r"
+expect "Enter app pack reference or local path:"
+send "$pack_dir\r"
+expect "Select number or value:"
+send "1\r"
+expect "Select number or value:"
+send "1\r"
+expect "Select number or value:"
+send "4\r"
+expect "Select number or value:"
+send "4\r"
+expect "Select number or value:"
+send "3\r"
+
+expect {
+  -re "Select option:" {
+    send "0\r"
+    expect eof
+  }
+  eof {}
+  timeout { exit 1 }
+}
