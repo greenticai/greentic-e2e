@@ -203,7 +203,13 @@ jobs:
           set -euo pipefail
 
           tenant_len="$(printf '%s' "$GREENTIC_TENANT" | wc -c | tr -d ' ')"
-          tenant_sha="$(printf '%s' "$GREENTIC_TENANT" | shasum -a 256 | awk '{print $1}')"
+          if command -v shasum >/dev/null 2>&1; then
+            tenant_sha="$(printf '%s' "$GREENTIC_TENANT" | shasum -a 256 | awk '{print $1}')"
+          elif command -v sha256sum >/dev/null 2>&1; then
+            tenant_sha="$(printf '%s' "$GREENTIC_TENANT" | sha256sum | awk '{print $1}')"
+          else
+            tenant_sha="$(powershell -NoProfile -Command "[System.BitConverter]::ToString([System.Security.Cryptography.SHA256]::Create().ComputeHash([System.Text.Encoding]::UTF8.GetBytes($env:GREENTIC_TENANT))).Replace('-', '').ToLowerInvariant()")"
+          fi
 
           echo "Resolved tenant length: ${tenant_len}"
           echo "Resolved tenant sha256[0:12]: ${tenant_sha:0:12}"
