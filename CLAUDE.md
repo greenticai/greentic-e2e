@@ -4,234 +4,126 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-End-to-end tests for the Greentic CLI (`gtc`) covering:
-1. **Nightly Tests** - Installation and initialization across platforms
-2. **Provider E2E Tests** - Full lifecycle for all messaging and event providers
+End-to-end tests for the Greentic CLI (`gtc`). Two test suites run nightly via GitHub Actions:
 
-## Quick Start
-
-```bash
-# Run dummy provider tests locally (no credentials needed)
-./scripts/run_provider_e2e.sh
-
-# Run with specific provider
-./scripts/run_provider_e2e.sh --scope messaging --verbose
-```
+1. **Nightly Install/Wizard** (`nightly-e2e.yml`, 00:00 UTC) - Tests `gtc install`, `gtc doctor`, and `gtc wizard` across 6 platform/arch combos (Linux x64/arm64, macOS arm64/x64, Windows x64/arm64). Uses `expect` scripts for interactive wizard testing.
+2. **Provider E2E** (`provider-e2e.yml`, 00:30 UTC) - Full provider lifecycle: bundle creation, setup, start, HTTP ingress verification, and shutdown. Tests all messaging and event providers.
 
 ## Running Tests
 
 ### Local Provider Tests
 
 ```bash
-# Full test (dummy providers only)
+# Dummy providers only (no credentials needed)
 ./scripts/run_provider_e2e.sh
 
-# Options
-./scripts/run_provider_e2e.sh --scope messaging    # messaging only
-./scripts/run_provider_e2e.sh --scope events       # events only
-./scripts/run_provider_e2e.sh --skip-wizard        # skip wizard step
-./scripts/run_provider_e2e.sh --skip-setup         # skip setup step
-./scripts/run_provider_e2e.sh --keep-running       # don't stop services
-./scripts/run_provider_e2e.sh --bundle /path       # use existing bundle
-./scripts/run_provider_e2e.sh --verbose            # verbose output
+# Specific scope
+./scripts/run_provider_e2e.sh --scope messaging
+./scripts/run_provider_e2e.sh --scope events
+./scripts/run_provider_e2e.sh --scope all
+
+# Single provider
+./scripts/run_provider_e2e.sh --provider messaging-telegram
+
+# Other options
+./scripts/run_provider_e2e.sh --skip-setup          # skip gtc setup step
+./scripts/run_provider_e2e.sh --skip-start          # skip gtc start + ingress tests
+./scripts/run_provider_e2e.sh --keep-running         # don't stop services after test
+./scripts/run_provider_e2e.sh --bundle /path          # use existing bundle directory
+./scripts/run_provider_e2e.sh --dry-run              # validate without running gtc
+./scripts/run_provider_e2e.sh --verbose              # verbose output
 ```
 
-### Nightly Tests (with Docker/Act)
+Requires `gtc` CLI installed (`cargo binstall gtc`). For providers with secrets, copy `.secrets-provider.example` to `.secrets-provider` and fill in values.
+
+### Nightly Tests Locally (Docker/Act)
 
 ```bash
-# Prerequisites: Docker + .secrets-provider file
+# Prerequisites: Docker + .secrets-provider with GREENTIC_TENANT_TOKEN
 ./ci/run_actions.sh
 ACT_MATRIX_ARCH=arm64 ./ci/run_actions.sh
 ```
 
-## Repository Structure
+## Architecture
+
+### Test Flow
 
 ```
-.github/workflows/
-  nightly-e2e.yml           # Installation tests (midnight UTC)
-  provider-e2e.yml          # Provider lifecycle tests (00:30 UTC)
-
-scripts/
-  run_provider_e2e.sh       # Local provider test runner
-
-fixtures/
-  setup-answers/            # Setup answers for each provider
-    messaging-telegram.json
-    messaging-slack.json
-    messaging-teams.json
-    messaging-webex.json
-    messaging-whatsapp.json
-    messaging-email.json
-    messaging-webchat.json
-    messaging-dummy.json
-    events-webhook.json
-    events-timer.json
-    events-email-sendgrid.json
-    events-sms-twilio.json
-    events-dummy.json
-    all-messaging.json      # Combined messaging
-    all-events.json         # Combined events
-    all-providers.json      # All providers
-
-ci/
-  run_actions.sh            # Local nightly test runner
+gtc wizard -> gtc setup --answers <file> <bundle_dir> -> gtc start <bundle_dir> --cloudflared off --ngrok off -> HTTP ingress test -> stop
 ```
 
-## Provider Configuration
+Provider tests accept 2xx-4xx HTTP responses as passing (provider processed the request). Only 5xx or connection failures count as errors.
 
-### Messaging Providers
+### Fixture System
 
-| Provider | Required Secrets | Setup Complexity |
-|----------|------------------|------------------|
-| `messaging-dummy` | None | Low |
-| `messaging-telegram` | `TELEGRAM_BOT_TOKEN` | Low |
-| `messaging-slack` | `SLACK_BOT_TOKEN`, `SLACK_APP_ID` | Medium |
-| `messaging-teams` | `MS_BOT_APP_ID`, `MS_BOT_APP_PASSWORD` | Medium |
-| `messaging-webex` | `WEBEX_BOT_TOKEN` | Low |
-| `messaging-whatsapp` | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_VERIFY_TOKEN` | High |
-| `messaging-email` | `GRAPH_TENANT_ID`, `MS_GRAPH_CLIENT_ID`, `MS_GRAPH_CLIENT_SECRET` | High |
-| `messaging-webchat-gui` | `WEBCHAT_JWT_SIGNING_KEY` | Medium |
-
-### Event Providers
-
-| Provider | Required Secrets | Setup Complexity |
-|----------|------------------|------------------|
-| `events-dummy` | None | Low |
-| `events-webhook` | None | Low |
-| `events-timer` | None | Low |
-| `events-email-sendgrid` | `SENDGRID_API_KEY` | Medium |
-| `events-sms-twilio` | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` | Medium |
-
-## Test Flow
-
-```
-gtc wizard → gtc setup --answers → gtc start → verify → stop
-```
-
-Each provider test validates:
-1. Bundle creation (with provider pack reference)
-2. Provider setup (using answers file)
-3. Service startup (with `--cloudflared off --ngrok off`)
-4. Service verification (PID files, log indicators)
-5. Graceful shutdown
-
-## Secrets Setup
-
-### GitHub Actions
-
-Add these secrets to your repository:
-
-```
-# General
-PUBLIC_BASE_URL           # Set dynamically by ngrok
-NGROK_AUTHTOKEN           # ngrok auth token
-
-# Telegram
-TELEGRAM_BOT_TOKEN
-
-# Slack
-SLACK_BOT_TOKEN
-SLACK_APP_ID
-SLACK_CONFIGURATION_TOKEN
-
-# Teams
-MS_BOT_APP_ID
-MS_BOT_APP_PASSWORD
-
-# Webex
-WEBEX_BOT_TOKEN
-
-# WhatsApp
-WHATSAPP_PHONE_NUMBER_ID
-WHATSAPP_TOKEN
-WHATSAPP_VERIFY_TOKEN
-
-# Email
-EMAIL_FROM_ADDRESS
-GRAPH_TENANT_ID
-MS_GRAPH_CLIENT_ID
-MS_GRAPH_CLIENT_SECRET
-
-# WebChat
-WEBCHAT_JWT_SIGNING_KEY
-
-# SendGrid
-SENDGRID_API_KEY
-SENDGRID_FROM_EMAIL
-
-# Twilio
-TWILIO_ACCOUNT_SID
-TWILIO_AUTH_TOKEN
-TWILIO_FROM_NUMBER
-```
-
-### Local Testing
-
-Copy `.secrets-provider.example` to `.secrets-provider` and fill in the values you need:
-
-```bash
-cp .secrets-provider.example .secrets-provider
-# Edit .secrets-provider with your credentials
-```
-
-## GTC Commands Tested
-
-| Command | Purpose |
-|---------|---------|
-| `gtc install` | Install public tools |
-| `gtc install --tenant` | Install tenant tools |
-| `gtc doctor` | Health check |
-| `gtc wizard` | Create bundles |
-| `gtc wizard --emit-answers` | Export wizard answers |
-| `gtc wizard apply --answers` | Apply saved answers |
-| `gtc setup --answers` | Configure providers |
-| `gtc start` | Start runtime services |
-
-## CI/CD
-
-| Workflow | Schedule | Scope |
-|----------|----------|-------|
-| `nightly-e2e.yml` | 00:00 UTC | Installation + wizard |
-| `provider-e2e.yml` | 00:30 UTC | Provider lifecycle |
-
-### Manual Trigger
-
-```yaml
-# provider-e2e.yml inputs:
-gtc_version: latest | x.y.z
-provider_scope: dummy | messaging | events | all
-```
-
-## Adding New Provider Tests
-
-1. Create fixture: `fixtures/setup-answers/<provider>.json`
-2. Add to workflow matrix in `provider-e2e.yml`
-3. Add required secrets check
-4. Update `.secrets-provider.example`
-
-Example fixture format:
+**Setup answers** (`fixtures/setup-answers/<provider>.json`) - JSON files with provider config. Environment variables are substituted at runtime using `envsubst`. Example:
 ```json
 {
-  "<provider-name>": {
+  "messaging-telegram": {
     "enabled": true,
-    "public_base_url": "${PUBLIC_BASE_URL}",
-    "secret_field": "${SECRET_ENV_VAR}"
+    "telegram_bot_token": "${TELEGRAM_BOT_TOKEN}"
   }
 }
 ```
 
-## Troubleshooting
+The local test runner merges multiple fixture files via a Python script when testing multiple providers.
 
-### Services fail to start
-- Check `~/.greentic/state/` for PID files
-- Check logs in test output
-- Verify gtc version: `gtc --version`
+**Wizard fixtures** (`fixtures/wizard/`) - `expect` scripts that drive interactive wizard tests:
+- `e2e.env` - shared wizard input variables (pack ID, bundle name)
+- `traversal.expect` - interactive wizard traversal test
+- `emit_answers.expect` - tests `gtc wizard --emit-answers`
+- `replay-answers.template.json` - template with `__PLACEHOLDER__` tokens replaced at runtime
 
-### Setup fails
-- Verify secrets are set correctly
-- Check answers file format matches provider schema
-- Run `gtc setup --help` for available options
+### Bundle Config
 
-### Missing provider pack
-- Run `gtc install` to ensure packs are available
-- Check OCI registry connectivity
+Bundles are YAML files (`greentic.demo.yaml`) that declare providers with OCI pack references:
+```yaml
+providers:
+  messaging:
+    messaging-dummy:
+      pack: "oci://ghcr.io/greentic-biz/packs/messaging-dummy:latest"
+  events:
+    events-dummy:
+      pack: "oci://ghcr.io/greentic-biz/packs/events-dummy:latest"
+```
+
+### HTTP Ingress Endpoints
+
+Services listen on `http://127.0.0.1:8080`. Ingress pattern:
+- Messaging: `POST /v1/messaging/ingress/<provider>/demo/default`
+- Events: `POST /v1/events/ingress/<provider>/demo/default`
+
+Exception: `events-timer` has no HTTP ingress (schedule-based); verified via log inspection.
+
+### Providers
+
+| Provider | Secrets Required |
+|----------|-----------------|
+| `messaging-dummy` | None |
+| `messaging-telegram` | `TELEGRAM_BOT_TOKEN` |
+| `messaging-slack` | `SLACK_BOT_TOKEN`, `SLACK_APP_ID` |
+| `messaging-teams` | `MS_BOT_APP_ID`, `MS_BOT_APP_PASSWORD` |
+| `messaging-webex` | `WEBEX_BOT_TOKEN` |
+| `messaging-whatsapp` | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` |
+| `messaging-email` | `MS_GRAPH_CLIENT_ID`, `MS_GRAPH_CLIENT_SECRET`, `GRAPH_TENANT_ID` |
+| `messaging-webchat-gui` | `WEBCHAT_JWT_SIGNING_KEY` |
+| `events-dummy` | None |
+| `events-webhook` | None |
+| `events-timer` | None |
+| `events-email-sendgrid` | `SENDGRID_API_KEY` |
+| `events-sms-twilio` | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` |
+
+Full list of all secret env vars is in `.secrets-provider.example`.
+
+## Adding a New Provider Test
+
+1. Create `fixtures/setup-answers/<provider>.json` (use `${ENV_VAR}` for secrets)
+2. Add provider to the workflow matrix in `provider-e2e.yml`
+3. Add secrets check in the workflow's "Check required secrets" step
+4. Add test payload in `get_test_payload()` in `scripts/run_provider_e2e.sh`
+5. Update `.secrets-provider.example` with any new env vars
+
+## Key Scripts
+
+- `scripts/run_provider_e2e.sh` - Main local test runner. Uses Perl for cross-platform timeout handling. Cleanup trap kills `greentic-runner` and `nats-server` processes.
+- `ci/run_actions.sh` - Runs nightly workflow locally via [nektos/act](https://github.com/nektos/act). Auto-installs `act` to `.bin/`. Resolves Docker host for both macOS (Docker Desktop) and Linux.
