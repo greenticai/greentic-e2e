@@ -1,13 +1,6 @@
 name: Provider E2E Tests
 
 on:
-  push:
-    branches: [develop, main]
-  pull_request:
-    branches: [develop, main]
-  # Triggered from greentic-messaging-providers or other repos via API
-  repository_dispatch:
-    types: [provider-e2e]
   schedule:
     - cron: '30 0 * * *'  # nightly
   workflow_dispatch:
@@ -30,7 +23,7 @@ on:
 permissions:
   contents: read
 
-# Inputs come from workflow_dispatch or repository_dispatch client_payload
+# Inputs come from workflow_dispatch, with defaults for nightly runs
 env:
   GTC_VERSION: ${{ github.event.inputs.gtc_version || github.event.client_payload.gtc_version || 'latest' }}
   PROVIDER_SCOPE: ${{ github.event.inputs.provider_scope || github.event.client_payload.provider_scope || 'all' }}

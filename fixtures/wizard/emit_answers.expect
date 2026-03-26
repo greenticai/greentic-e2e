@@ -13,22 +13,8 @@ expect {
 }
 
 expect "Select option:"
-send "1\r"
-expect "> "
-send "1\r"
-expect "Pack id"
-expect "> "
-send "$pack_id\r"
-expect "Pack directory"
-expect "> "
-send "$pack_dir\r"
-
-expect "> "
-send "M\r"
-expect "> "
-send "0\r"
-expect "Select option:"
 send "2\r"
+expect "Bundle Wizard"
 expect "Select number or value:"
 send "1\r"
 expect "Bundle name:"

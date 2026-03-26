@@ -1,4 +1,4 @@
-name: Nightly E2E Verification
+name: Nightly e2e gtc install/wizard
 
 on:
   schedule:
