@@ -23,6 +23,11 @@ AWS_ACCESS_KEY_ID=... \
 AWS_SECRET_ACCESS_KEY=... \
 ./scripts/run_cloud_demo_e2e.sh --release-version v0.1.24
 
+# Optional overrides
+export AWS_REGION='eu-north-1'
+export AWS_DEFAULT_REGION='eu-north-1'
+export GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND='s3'
+
 # Specific scope
 ./scripts/run_provider_e2e.sh --scope messaging
 ./scripts/run_provider_e2e.sh --scope events
@@ -68,6 +73,7 @@ gtc wizard -> gtc setup -> gtc start <bundle_dir> --target aws
 ```
 
 Nightly/manual workflow keeps admin checks opt-in until the released `gtc` artifact includes `gtc admin tunnel`.
+For local runs only `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are required unless you want to override the default region/backend values.
 
 Provider tests accept 2xx-4xx HTTP responses as passing (provider processed the request). Only 5xx or connection failures count as errors.
 

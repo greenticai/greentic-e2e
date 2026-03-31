@@ -30,9 +30,17 @@ AWS_SECRET_ACCESS_KEY=... \
 ./scripts/run_cloud_demo_e2e.sh --release-version v0.1.24
 ```
 
+Optional overrides:
+```bash
+export AWS_REGION='eu-north-1'
+export AWS_DEFAULT_REGION='eu-north-1'
+export GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND='s3'
+```
+
 Defaults:
 - AWS region defaults to `eu-north-1`
 - Terraform remote state backend defaults to `s3`
+- Only `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are required exports for the local script unless you want to override those defaults.
 
 GitHub Actions:
 - `Nightly e2e gtc install/wizard`
