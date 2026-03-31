@@ -13,6 +13,33 @@ This repository automates the validation of `gtc` installation and initializatio
 2.  **Tool Sync**: Runs `gtc install tools --latest` to ensure all delegated tools (flow, pack, runner, etc.) are available.
 3.  **Tenant Setup**: Tests `gtc install --tenant` for isolated environment initialization, using the credential flag supported by the installed `gtc` version. This step is required and fails the job if the tenant token is missing or invalid.
 4.  **Artifact Verification**: Checks if libraries, commercial components, and documentation are correctly placed in the `~/.greentic` directory.
+5.  **Provider Lifecycle**: Verifies `wizard -> setup -> start -> ingress -> stop` for provider bundles.
+6.  **Cloud Demo Lifecycle**: Work in progress harness for `wizard -> setup -> start --target aws -> web UI -> admin tunnel -> stop --destroy`.
+
+## Local Scripts
+
+Provider lifecycle:
+```bash
+./scripts/run_provider_e2e.sh
+```
+
+AWS cloud demo lifecycle:
+```bash
+AWS_ACCESS_KEY_ID=... \
+AWS_SECRET_ACCESS_KEY=... \
+AWS_REGION=eu-north-1 \
+AWS_DEFAULT_REGION=eu-north-1 \
+./scripts/run_cloud_demo_e2e.sh --release-version v0.1.24
+```
+
+GitHub Actions:
+- `Nightly e2e gtc install/wizard`
+- `Provider E2E Tests`
+- `Cloud Demo E2E` for the AWS demo lifecycle
+
+Notes:
+- `Cloud Demo E2E` runs web UI validation by default.
+- Admin tunnel checks are opt-in in GitHub Actions until the released `gtc` line includes `gtc admin tunnel`.
 
 ## Maintenance
 The workflow runs automatically every night at midnight. It can also be triggered manually via the "Actions" tab.

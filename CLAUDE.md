@@ -8,6 +8,7 @@ End-to-end tests for the Greentic CLI (`gtc`). Two test suites run nightly via G
 
 1. **Nightly Install/Wizard** (`nightly-e2e.yml`, 00:00 UTC) - Tests `gtc install`, `gtc doctor`, and `gtc wizard` across 6 platform/arch combos (Linux x64/arm64, macOS arm64/x64, Windows x64/arm64). Uses `expect` scripts for interactive wizard testing.
 2. **Provider E2E** (`provider-e2e.yml`, 00:30 UTC) - Full provider lifecycle: bundle creation, setup, start, HTTP ingress verification, and shutdown. Tests all messaging and event providers.
+3. **Cloud Demo E2E** (`cloud-demo-e2e.yml`, 02:00 UTC) - AWS demo lifecycle: `gtc wizard`, `gtc setup`, `gtc start --target aws`, web UI verification, optional admin tunnel verification, and `gtc stop --destroy`.
 
 ## Running Tests
 
@@ -16,6 +17,13 @@ End-to-end tests for the Greentic CLI (`gtc`). Two test suites run nightly via G
 ```bash
 # Dummy providers only (no credentials needed)
 ./scripts/run_provider_e2e.sh
+
+# AWS cloud demo lifecycle
+AWS_ACCESS_KEY_ID=... \
+AWS_SECRET_ACCESS_KEY=... \
+AWS_REGION=eu-north-1 \
+AWS_DEFAULT_REGION=eu-north-1 \
+./scripts/run_cloud_demo_e2e.sh --release-version v0.1.24
 
 # Specific scope
 ./scripts/run_provider_e2e.sh --scope messaging
@@ -51,6 +59,17 @@ ACT_MATRIX_ARCH=arm64 ./ci/run_actions.sh
 ```
 gtc wizard -> gtc setup --answers <file> <bundle_dir> -> gtc start <bundle_dir> --cloudflared off --ngrok off -> HTTP ingress test -> stop
 ```
+
+Cloud demo flow under development:
+
+```
+gtc wizard -> gtc setup -> gtc start <bundle_dir> --target aws
+-> GET /readyz -> GET /v1/web/webchat/demo/
+-> gtc admin tunnel --target aws -> GET /admin/v1/health
+-> add/remove admin CN -> gtc stop --destroy
+```
+
+Nightly/manual workflow keeps admin checks opt-in until the released `gtc` artifact includes `gtc admin tunnel`.
 
 Provider tests accept 2xx-4xx HTTP responses as passing (provider processed the request). Only 5xx or connection failures count as errors.
 
@@ -126,4 +145,5 @@ Full list of all secret env vars is in `.secrets-provider.example`.
 ## Key Scripts
 
 - `scripts/run_provider_e2e.sh` - Main local test runner. Uses Perl for cross-platform timeout handling. Cleanup trap kills `greentic-runner` and `nats-server` processes.
+- `scripts/run_cloud_demo_e2e.sh` - AWS cloud demo lifecycle harness. Verifies published `greentic-demo` release assets, web UI route, and optional admin tunnel flow.
 - `ci/run_actions.sh` - Runs nightly workflow locally via [nektos/act](https://github.com/nektos/act). Auto-installs `act` to `.bin/`. Resolves Docker host for both macOS (Docker Desktop) and Linux.

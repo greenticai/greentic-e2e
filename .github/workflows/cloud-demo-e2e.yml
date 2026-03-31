@@ -1,0 +1,102 @@
+name: Cloud Demo E2E
+
+on:
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      gtc_version:
+        description: 'gtc version to test'
+        default: 'latest'
+        required: false
+      demo_release_version:
+        description: 'greentic-demo release version'
+        default: 'v0.1.24'
+        required: false
+      admin_flow:
+        description: 'Run admin tunnel checks'
+        default: false
+        required: false
+        type: boolean
+
+permissions:
+  contents: read
+
+env:
+  GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
+  DEMO_RELEASE_VERSION: ${{ github.event.inputs.demo_release_version || 'v0.1.24' }}
+  RUN_ADMIN_FLOW: ${{ github.event.inputs.admin_flow || false }}
+
+jobs:
+  aws-cloud-demo:
+    name: AWS Cloud Demo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_REGION: ${{ secrets.AWS_REGION || 'eu-north-1' }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'eu-north-1' }}
+      GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND: ${{ secrets.GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND || 's3' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${AWS_ACCESS_KEY_ID}" ]] || { echo "Missing AWS_ACCESS_KEY_ID"; exit 1; }
+          [[ -n "${AWS_SECRET_ACCESS_KEY}" ]] || { echo "Missing AWS_SECRET_ACCESS_KEY"; exit 1; }
+          [[ -n "${AWS_REGION}" ]] || { echo "Missing AWS_REGION"; exit 1; }
+          [[ -n "${AWS_DEFAULT_REGION}" ]] || { echo "Missing AWS_DEFAULT_REGION"; exit 1; }
+
+      - name: Bootstrap toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.91.0
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup toolchain install 1.91.0 --profile minimal
+          rustup default 1.91.0
+
+      - name: Install cargo-binstall
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+
+      - name: Install gtc CLI
+        shell: bash
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: |
+          if [[ -z "${GTC_VERSION}" || "${GTC_VERSION}" == "latest" ]]; then
+            cargo binstall -y gtc
+          else
+            cargo binstall -y "gtc@${GTC_VERSION}"
+          fi
+          gtc --version
+          gtc install
+
+      - name: Run AWS cloud demo E2E
+        shell: bash
+        env:
+          SKIP_ADMIN: ${{ env.RUN_ADMIN_FLOW == 'true' && 'false' || 'true' }}
+        run: |
+          set -euo pipefail
+          WORK_DIR="${RUNNER_TEMP}/cloud-demo-e2e"
+          rm -rf "${WORK_DIR}"
+          ./scripts/run_cloud_demo_e2e.sh \
+            --bundle-dir "${WORK_DIR}" \
+            --release-version "${DEMO_RELEASE_VERSION}" \
+            --verbose
+
+      - name: Upload cloud demo logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloud-demo-e2e-logs
+          path: ${{ runner.temp }}/cloud-demo-e2e
+          if-no-files-found: ignore
