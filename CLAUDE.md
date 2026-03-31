@@ -21,8 +21,6 @@ End-to-end tests for the Greentic CLI (`gtc`). Two test suites run nightly via G
 # AWS cloud demo lifecycle
 AWS_ACCESS_KEY_ID=... \
 AWS_SECRET_ACCESS_KEY=... \
-AWS_REGION=eu-north-1 \
-AWS_DEFAULT_REGION=eu-north-1 \
 ./scripts/run_cloud_demo_e2e.sh --release-version v0.1.24
 
 # Specific scope
@@ -146,4 +144,5 @@ Full list of all secret env vars is in `.secrets-provider.example`.
 
 - `scripts/run_provider_e2e.sh` - Main local test runner. Uses Perl for cross-platform timeout handling. Cleanup trap kills `greentic-runner` and `nats-server` processes.
 - `scripts/run_cloud_demo_e2e.sh` - AWS cloud demo lifecycle harness. Verifies published `greentic-demo` release assets, web UI route, and optional admin tunnel flow.
+  Defaults: `AWS_REGION/AWS_DEFAULT_REGION=eu-north-1`, `GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND=s3`.
 - `ci/run_actions.sh` - Runs nightly workflow locally via [nektos/act](https://github.com/nektos/act). Auto-installs `act` to `.bin/`. Resolves Docker host for both macOS (Docker Desktop) and Linux.

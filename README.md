@@ -27,10 +27,12 @@ AWS cloud demo lifecycle:
 ```bash
 AWS_ACCESS_KEY_ID=... \
 AWS_SECRET_ACCESS_KEY=... \
-AWS_REGION=eu-north-1 \
-AWS_DEFAULT_REGION=eu-north-1 \
 ./scripts/run_cloud_demo_e2e.sh --release-version v0.1.24
 ```
+
+Defaults:
+- AWS region defaults to `eu-north-1`
+- Terraform remote state backend defaults to `s3`
 
 GitHub Actions:
 - `Nightly e2e gtc install/wizard`

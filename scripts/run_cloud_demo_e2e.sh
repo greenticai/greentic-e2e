@@ -11,11 +11,12 @@
 # Required env:
 #   AWS_ACCESS_KEY_ID
 #   AWS_SECRET_ACCESS_KEY
-#   AWS_REGION
-#   AWS_DEFAULT_REGION
+#   AWS_REGION or AWS_DEFAULT_REGION (optional, default: eu-north-1)
 #
 # Optional env:
 #   GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND (default: s3)
+#   AWS_REGION (default: eu-north-1)
+#   AWS_DEFAULT_REGION (default: value of AWS_REGION)
 #   DEMO_RELEASE_VERSION (default: v0.1.24)
 #   WEBCHAT_EXPECTED_PATH (default: /v1/web/webchat/demo/)
 #
@@ -107,8 +108,8 @@ trap cleanup EXIT
 command -v "${GTC_CMD}" >/dev/null 2>&1 || die "gtc not found: ${GTC_CMD}"
 require_env AWS_ACCESS_KEY_ID
 require_env AWS_SECRET_ACCESS_KEY
-require_env AWS_REGION
-require_env AWS_DEFAULT_REGION
+export AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-eu-north-1}}"
+export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-${AWS_REGION}}"
 export GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND="${GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND:-s3}"
 export GREENTIC_DEPLOY_BUNDLE_SOURCE="https://github.com/greenticai/greentic-demo/releases/download/${DEMO_RELEASE_VERSION}/cloud-deploy-demo.gtbundle"
 
