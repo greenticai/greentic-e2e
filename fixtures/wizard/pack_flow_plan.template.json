@@ -1,0 +1,45 @@
+{
+  "schema_id": "greentic-flow.wizard.plan",
+  "schema_version": "2.0.0",
+  "actions": [
+    {
+      "action": "add-step",
+      "flow": "flows/main.ygtc",
+      "component": "oci://ghcr.io/greenticai/components/templates@sha256:107740ff9900f7fab0b047569d90daaaca0a380c4d8fb2c1b84af660e4562df5",
+      "mode": "default",
+      "answers": {
+        "templates.text": "hello from templates"
+      }
+    },
+    {
+      "action": "add-step",
+      "flow": "flows/main.ygtc",
+      "component": "oci://ghcr.io/greenticai/components/component-adaptive-card@sha256:2d039dcbacd4cb50bc4ce857299c4f28c2a8eae99c72561072c86a9510a2ab41",
+      "mode": "default",
+      "answers": {
+        "card_source": "inline",
+        "default_card_inline": "{\"type\":\"AdaptiveCard\",\"version\":\"1.6\",\"body\":[{\"type\":\"TextBlock\",\"text\":\"Hello from adaptive card\"}]}",
+        "default_card_asset": "",
+        "catalog_registry_ref": "",
+        "multilingual": true,
+        "language_mode": "all",
+        "supported_locales": "en"
+      }
+    },
+    {
+      "action": "add-flow",
+      "flow": "flows/qa.ygtc",
+      "flow_id": "qa",
+      "flow_type": "messaging"
+    },
+    {
+      "action": "add-step",
+      "flow": "flows/qa.ygtc",
+      "component": "oci://ghcr.io/greenticai/components/component-qa@sha256:2e8f64e9bf1195968f8752369ca9d9a461dfbdb0045a812b8df763551a4fb2db",
+      "mode": "default",
+      "answers": {
+        "qa_form_asset_path": "qa/forms/support.form.json"
+      }
+    }
+  ]
+}

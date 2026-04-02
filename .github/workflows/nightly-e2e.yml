@@ -106,27 +106,57 @@ jobs:
           gtc --version
 
       - name: Run gtc public install
+        id: public_install
+        continue-on-error: true
         shell: bash
         run: |
           set -euo pipefail
 
-          gtc install
+          gtc install >"${RUNNER_TEMP}/gtc-public-install.log" 2>&1 || {
+            cat "${RUNNER_TEMP}/gtc-public-install.log"
+            exit 1
+          }
 
       - name: Run gtc doctor
+        id: public_doctor
+        continue-on-error: true
         shell: bash
         run: |
-          gtc doctor
+          set -euo pipefail
+          gtc doctor >"${RUNNER_TEMP}/gtc-doctor.log" 2>&1 || {
+            cat "${RUNNER_TEMP}/gtc-doctor.log"
+            exit 1
+          }
 
-      - name: Install expect for wizard tests
-        if: runner.os == 'Linux' || runner.os == 'macOS'
+      - name: Diagnose public install failure
+        if: ${{ always() && steps.public_install.outcome != 'success' }}
         shell: bash
         run: |
-          if [[ "${{ runner.os }}" == "Linux" ]]; then
-            sudo apt-get update
-            sudo apt-get install -y expect
+          set -euo pipefail
+
+          echo "whoami: $(whoami)"
+          echo "HOME: ${HOME}"
+          echo "CARGO_HOME: ${CARGO_HOME:-<unset>}"
+          echo "PATH: ${PATH}"
+
+          if command -v greentic-deployer >/dev/null 2>&1; then
+            deployer_bin="$(command -v greentic-deployer)"
+            deployer_dir="$(dirname "$deployer_bin")"
+            echo "greentic-deployer binary: ${deployer_bin}"
+            greentic-deployer --version || true
+            echo "Listing deployer sibling dist dir (${deployer_dir}/dist):"
+            ls -la "${deployer_dir}/dist" || true
           else
-            brew install expect
+            echo "greentic-deployer binary not found in PATH"
           fi
+
+          echo "Listing ~/.cargo/bin/dist:"
+          ls -la "${HOME}/.cargo/bin/dist" || true
+          echo "Listing /root/.cargo/bin/dist:"
+          ls -la /root/.cargo/bin/dist || true
+
+          echo "Searching for terraform.gtpack under home and /root (first 50 hits):"
+          find "${HOME}" /root -type f -name terraform.gtpack 2>/dev/null | head -n 50 || true
 
       - name: Prepare wizard test workspace
         if: runner.os == 'Linux' || runner.os == 'macOS'
@@ -142,10 +172,29 @@ jobs:
           root="$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/gtc-wizard-e2e.XXXXXX")"
           pack_dir="${root}/${WIZARD_PACK_SUBDIR}"
           replay_answers="${root}/replay-answers.json"
+          pack_flow_plan="${root}/pack-flow-plan.json"
+          pack_launcher_apply="${root}/pack-launcher-apply.json"
+          pack_launcher_delegate="${root}/pack-launcher-delegate-flow.json"
+          pack_test_dir="${root}/pack-under-test"
+          demo_app_pack_dir="${root}/demo-app-pack"
+          bundle_complex_answers="${root}/bundle-complex-answers.json"
+          bundle_complex_delegate_answers="${root}/bundle-complex-delegate-answers.json"
+          bundle_complex_dir="${root}/bundle-complex"
+
+          cp -R fixtures/packs/demo-app-pack "$demo_app_pack_dir"
+
           {
             echo "WIZARD_E2E_ROOT=${root}"
             echo "WIZARD_PACK_ID=${WIZARD_PACK_ID}"
             echo "WIZARD_PACK_DIR=${pack_dir}"
+            echo "WIZARD_PACK_TEST_DIR=${pack_test_dir}"
+            echo "WIZARD_PACK_FLOW_PLAN=${pack_flow_plan}"
+            echo "WIZARD_PACK_LAUNCHER_APPLY=${pack_launcher_apply}"
+            echo "WIZARD_PACK_LAUNCHER_DELEGATE=${pack_launcher_delegate}"
+            echo "WIZARD_DEMO_APP_PACK_DIR=${demo_app_pack_dir}"
+            echo "WIZARD_BUNDLE_COMPLEX_ANSWERS=${bundle_complex_answers}"
+            echo "WIZARD_BUNDLE_COMPLEX_DELEGATE_ANSWERS=${bundle_complex_delegate_answers}"
+            echo "WIZARD_BUNDLE_COMPLEX_DIR=${bundle_complex_dir}"
             echo "WIZARD_BUNDLE_NAME=${WIZARD_BUNDLE_NAME}"
             echo "WIZARD_BUNDLE_ID=${WIZARD_BUNDLE_ID}"
             echo "WIZARD_BUNDLE_DIR=${root}/bundle"
@@ -161,13 +210,86 @@ jobs:
             -e "s|__WIZARD_BUNDLE_DIR__|${root}/bundle|g" \
             fixtures/wizard/replay-answers.template.json >"$replay_answers"
 
+          cp fixtures/wizard/pack_flow_plan.template.json "$pack_flow_plan"
+
+          sed \
+            -e "s|__WIZARD_BUNDLE_COMPLEX_DIR__|${bundle_complex_dir}|g" \
+            -e "s|__WIZARD_DEMO_APP_PACK_DIR__|${demo_app_pack_dir}|g" \
+            fixtures/wizard/bundle_complex.template.json >"$bundle_complex_answers"
+
+          jq '.answers.delegate_answer_document' "$bundle_complex_answers" >"$bundle_complex_delegate_answers"
+
+          jq -n \
+            --arg pack_dir "$pack_test_dir" \
+            '
+            {
+              wizard_id: "greentic-dev.wizard.launcher.main",
+              schema_id: "greentic-dev.launcher.main",
+              schema_version: "1.0.0",
+              locale: "en",
+              locks: {},
+              answers: {
+                selected_action: "pack",
+                delegate_answer_document: {
+                  wizard_id: "greentic-pack.wizard.run",
+                  schema_id: "greentic-pack.wizard.answers",
+                  schema_version: "1.0.0",
+                  locale: "en",
+                  locks: {},
+                  answers: {
+                    pack_dir: $pack_dir,
+                    create_pack_id: "ai.greentic.e2e.wizard.pack",
+                    create_pack_scaffold: true,
+                    run_delegate_flow: false,
+                    run_build: false,
+                    run_doctor: false,
+                    sign: false
+                  }
+                }
+              }
+            }
+            ' >"$pack_launcher_apply"
+
+          jq -n \
+            --arg pack_dir "$pack_test_dir" \
+            --argjson flow_plan "$(cat "$pack_flow_plan")" \
+            '
+            {
+              wizard_id: "greentic-dev.wizard.launcher.main",
+              schema_id: "greentic-dev.launcher.main",
+              schema_version: "1.0.0",
+              locale: "en",
+              locks: {},
+              answers: {
+                selected_action: "pack",
+                delegate_answer_document: {
+                  wizard_id: "greentic-pack.wizard.run",
+                  schema_id: "greentic-pack.wizard.answers",
+                  schema_version: "1.0.0",
+                  locale: "en",
+                  locks: {},
+                  answers: {
+                    pack_dir: $pack_dir,
+                    create_pack_id: "ai.greentic.e2e.wizard.pack",
+                    create_pack_scaffold: true,
+                    run_delegate_flow: true,
+                    flow_wizard_answers: $flow_plan,
+                    run_build: false,
+                    run_doctor: false,
+                    sign: false
+                  }
+                }
+              }
+            }
+            ' >"$pack_launcher_delegate"
+
       - name: Run gtc wizard interactive test
         id: wizard_interactive
         if: runner.os == 'Linux' || runner.os == 'macOS'
         continue-on-error: true
         shell: bash
         run: |
-          expect fixtures/wizard/traversal.expect
+          python3 fixtures/wizard/traversal.py
 
       - name: Run gtc wizard emit-answers test
         id: wizard_emit
@@ -177,12 +299,13 @@ jobs:
         run: |
           set -euo pipefail
 
-          expect fixtures/wizard/emit_answers.expect >"$WIZARD_EMIT_LOG"
+          python3 fixtures/wizard/emit_answers.py >"$WIZARD_EMIT_LOG"
 
           test -s "$WIZARD_EMIT_FILE"
           grep -q '"wizard_id": "greentic-dev.wizard.launcher.main"' "$WIZARD_EMIT_FILE"
           grep -q "\"selected_action\": \"bundle\"" "$WIZARD_EMIT_FILE"
-          grep -q "\"bundle_name\": \"${WIZARD_BUNDLE_NAME}\"" "$WIZARD_EMIT_FILE"
+          grep -Eq "\"(name|bundle_name)\": \"${WIZARD_BUNDLE_NAME}\"" "$WIZARD_EMIT_FILE"
+          grep -q '"delegate_answer_document"' "$WIZARD_EMIT_FILE"
 
       - name: Run gtc wizard answers replay test
         id: wizard_replay
@@ -194,6 +317,117 @@ jobs:
 
           gtc wizard validate --answers "$WIZARD_REPLAY_ANSWERS" >"$WIZARD_BUNDLE_DIR.validate.log"
           grep -q '"program": "greentic-bundle"' "$WIZARD_BUNDLE_DIR.validate.log"
+
+      - name: Run gtc wizard pack delegate-flow test
+        id: wizard_pack_delegate_flow
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gtc wizard --schema >"$WIZARD_E2E_ROOT/wizard-launcher.schema.json"
+          grep -q '"greentic_pack_wizard_answers"' "$WIZARD_E2E_ROOT/wizard-launcher.schema.json"
+
+          # Intentionally exercises launcher -> pack -> flow delegation path.
+          # If this fails, it should surface as an e2e regression to triage.
+          if ! gtc wizard apply \
+            --answers "$WIZARD_PACK_LAUNCHER_DELEGATE" \
+            --yes \
+            --non-interactive \
+            >"$WIZARD_E2E_ROOT/wizard-pack-delegate-flow.log" 2>&1; then
+            if grep -q "unexpected argument '--execution'" "$WIZARD_E2E_ROOT/wizard-pack-delegate-flow.log"; then
+              echo "Detected upstream regression: greentic-pack delegates to greentic-flow with unsupported '--execution' argument."
+            fi
+            cat "$WIZARD_E2E_ROOT/wizard-pack-delegate-flow.log"
+            exit 1
+          fi
+
+      - name: Run gtc wizard pack build/doctor test
+        id: wizard_pack_build
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          gtc wizard apply \
+            --answers "$WIZARD_PACK_LAUNCHER_APPLY" \
+            --yes \
+            --non-interactive \
+            >"$WIZARD_E2E_ROOT/wizard-pack-apply.log" 2>&1
+
+          test -f "$WIZARD_PACK_TEST_DIR/pack.yaml"
+          test -f "$WIZARD_PACK_TEST_DIR/flows/main.ygtc"
+
+          greentic-flow wizard "$WIZARD_PACK_TEST_DIR" --answers "$WIZARD_PACK_FLOW_PLAN" \
+            >"$WIZARD_E2E_ROOT/wizard-pack-flow.log" 2>&1
+
+          greentic-pack update --in "$WIZARD_PACK_TEST_DIR" \
+            >"$WIZARD_E2E_ROOT/wizard-pack-update.log" 2>&1
+
+          greentic-pack build --in "$WIZARD_PACK_TEST_DIR" \
+            >"$WIZARD_E2E_ROOT/wizard-pack-build.log" 2>&1
+
+          greentic-pack doctor "$WIZARD_PACK_TEST_DIR" \
+            >"$WIZARD_E2E_ROOT/wizard-pack-doctor.log" 2>&1
+
+          test -s "$WIZARD_PACK_TEST_DIR/dist/pack.gtpack"
+
+          grep -q 'component-adaptive-card' "$WIZARD_PACK_TEST_DIR/flows/main.ygtc"
+          grep -q 'templates' "$WIZARD_PACK_TEST_DIR/flows/main.ygtc"
+          grep -q 'component-qa' "$WIZARD_PACK_TEST_DIR/flows/qa.ygtc"
+          grep -q 'Flows: 2' "$WIZARD_E2E_ROOT/wizard-pack-doctor.log"
+
+      - name: Run gtc wizard bundle build/doctor/inspect test
+        id: wizard_bundle_build
+        if: runner.os == 'Linux' || runner.os == 'macOS'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          retry() {
+            local attempts="$1"
+            shift
+            local n=1
+            until "$@"; do
+              if [[ "$n" -ge "$attempts" ]]; then
+                return 1
+              fi
+              n=$((n + 1))
+              sleep 2
+            done
+          }
+
+          gtc wizard validate \
+            --answers "$WIZARD_BUNDLE_COMPLEX_ANSWERS" \
+            >"$WIZARD_E2E_ROOT/wizard-bundle-validate.log" 2>&1
+
+          retry 3 greentic-bundle wizard apply \
+            --answers "$WIZARD_BUNDLE_COMPLEX_DELEGATE_ANSWERS" \
+            >"$WIZARD_E2E_ROOT/wizard-bundle-apply.log" 2>&1
+
+          test -f "$WIZARD_BUNDLE_COMPLEX_DIR/bundle.yaml"
+          test -f "$WIZARD_BUNDLE_COMPLEX_DIR/bundle.lock.json"
+
+          retry 3 greentic-bundle build --root "$WIZARD_BUNDLE_COMPLEX_DIR" \
+            >"$WIZARD_E2E_ROOT/wizard-bundle-build.log" 2>&1
+
+          greentic-bundle doctor --root "$WIZARD_BUNDLE_COMPLEX_DIR" \
+            >"$WIZARD_E2E_ROOT/wizard-bundle-doctor.log" 2>&1
+
+          greentic-bundle inspect --root "$WIZARD_BUNDLE_COMPLEX_DIR" --json \
+            >"$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+
+          grep -q '"ok": true' "$WIZARD_E2E_ROOT/wizard-bundle-doctor.log"
+          grep -q '"messaging-webchat-gui"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q '"events-webhook"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q '"state-redis"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q '"oauth-oidc-generic"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q '"greentic.secrets.aws-sm.gtpack:latest"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q '"greentic.fixture.serverless.gtpack:latest"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q "\"${WIZARD_DEMO_APP_PACK_DIR}\"" "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
 
       - name: Print tenant install context
         shell: bash
@@ -279,7 +513,10 @@ jobs:
           for result in \
             "wizard interactive:${{ steps.wizard_interactive.outcome }}" \
             "wizard emit-answers:${{ steps.wizard_emit.outcome }}" \
-            "wizard replay:${{ steps.wizard_replay.outcome }}"; do
+            "wizard replay:${{ steps.wizard_replay.outcome }}" \
+            "wizard pack delegate-flow:${{ steps.wizard_pack_delegate_flow.outcome }}" \
+            "wizard pack build:${{ steps.wizard_pack_build.outcome }}" \
+            "wizard bundle build:${{ steps.wizard_bundle_build.outcome }}"; do
             echo "$result"
             case "$result" in
               *:success|*:skipped) ;;
@@ -291,5 +528,30 @@ jobs:
 
           if [[ "$failures" -gt 0 ]]; then
             echo "One or more wizard tests failed."
+            exit 1
+          fi
+
+      - name: Check core install results
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          failures=0
+
+          for result in \
+            "public install:${{ steps.public_install.outcome }}" \
+            "public doctor:${{ steps.public_doctor.outcome }}"; do
+            echo "$result"
+            case "$result" in
+              *:success|*:skipped) ;;
+              *)
+                failures=$((failures + 1))
+                ;;
+            esac
+          done
+
+          if [[ "$failures" -gt 0 ]]; then
+            echo "One or more core install checks failed."
             exit 1
           fi

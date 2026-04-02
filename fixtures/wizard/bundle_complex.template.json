@@ -1,0 +1,34 @@
+{
+  "wizard_id": "greentic-dev.wizard.launcher.main",
+  "schema_id": "greentic-dev.launcher.main",
+  "schema_version": "1.0.0",
+  "locale": "en",
+  "locks": {},
+  "answers": {
+    "selected_action": "bundle",
+    "delegate_answer_document": {
+      "wizard_id": "greentic-bundle.wizard.run",
+      "schema_id": "greentic-bundle.wizard.answers",
+      "schema_version": "1.0.0",
+      "locale": "en",
+      "locks": {},
+      "answers": {
+        "mode": "create",
+        "bundle_name": "e2e-bundle-complex",
+        "bundle_id": "ai.greentic.e2e.bundle.complex",
+        "output_dir": "__WIZARD_BUNDLE_COMPLEX_DIR__",
+        "app_packs": [
+          "__WIZARD_DEMO_APP_PACK_DIR__"
+        ],
+        "extension_providers": [
+          "oci://ghcr.io/greenticai/packs/messaging/messaging-webchat-gui:latest",
+          "oci://ghcr.io/greenticai/packs/events/events-webhook:latest",
+          "oci://ghcr.io/greenticai/packs/state/state-redis:latest",
+          "oci://ghcr.io/greenticai/packs/deployer/greentic.fixture.serverless.gtpack:latest",
+          "oci://ghcr.io/greenticai/packs/secret/greentic.secrets.aws-sm.gtpack:latest",
+          "oci://ghcr.io/greenticai/packs/oauth/oauth-oidc-generic:latest"
+        ]
+      }
+    }
+  }
+}
