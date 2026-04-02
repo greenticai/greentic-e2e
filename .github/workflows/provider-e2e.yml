@@ -24,6 +24,11 @@ permissions:
   contents: read
 
 # Inputs come from workflow_dispatch, with defaults for nightly runs
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
   PROVIDER_SCOPE: ${{ github.event.inputs.provider_scope || 'all' }}

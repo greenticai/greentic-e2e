@@ -17,6 +17,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
   GREENTIC_TENANT: ${{ github.event.inputs.greentic_tenant || vars.GREENTIC_TENANT || '3point' }}

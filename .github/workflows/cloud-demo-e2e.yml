@@ -22,6 +22,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
   DEMO_RELEASE_VERSION: ${{ github.event.inputs.demo_release_version || 'v0.1.24' }}
