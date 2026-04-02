@@ -21,7 +21,7 @@ expect "Bundle name:"
 send "$bundle_name\r"
 expect "Bundle id:"
 send "$bundle_id\r"
-expect "Output directory:"
+expect -re "Output directory.*:"
 send "$bundle_dir\r"
 
 expect "Select number or value:"
@@ -36,6 +36,8 @@ expect "Select number or value:"
 send "4\r"
 expect "Select number or value:"
 send "4\r"
+expect -re {Enable bundle-level assets.*\[false\]:}
+send "n\r"
 expect "Select number or value:"
 send "3\r"
 
