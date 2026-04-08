@@ -21,7 +21,7 @@ End-to-end tests for the Greentic CLI (`gtc`). Two test suites run nightly via G
 # AWS cloud demo lifecycle
 AWS_ACCESS_KEY_ID=... \
 AWS_SECRET_ACCESS_KEY=... \
-./scripts/run_cloud_demo_e2e.sh --release-version v0.1.24
+./scripts/run_cloud_demo_e2e.sh
 
 # Optional overrides
 export AWS_REGION='eu-north-1'

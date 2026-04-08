@@ -17,7 +17,7 @@
 #   GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND (default: s3)
 #   AWS_REGION (default: eu-north-1)
 #   AWS_DEFAULT_REGION (default: value of AWS_REGION)
-#   DEMO_RELEASE_VERSION (default: v0.1.24)
+#   DEMO_RELEASE_VERSION (default: latest)
 #   WEBCHAT_EXPECTED_PATH (default: /v1/web/webchat/demo/)
 #
 
@@ -25,7 +25,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-DEMO_RELEASE_VERSION="${DEMO_RELEASE_VERSION:-v0.1.24}"
+DEMO_RELEASE_VERSION="${DEMO_RELEASE_VERSION:-latest}"
 WEBCHAT_EXPECTED_PATH="${WEBCHAT_EXPECTED_PATH:-/v1/web/webchat/demo/}"
 GTC_CMD="${GTC_CMD:-gtc}"
 SKIP_ADMIN="${SKIP_ADMIN:-false}"
@@ -292,11 +292,17 @@ require_env AWS_SECRET_ACCESS_KEY
 export AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-eu-north-1}}"
 export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-${AWS_REGION}}"
 export GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND="${GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND:-s3}"
-export GREENTIC_DEPLOY_BUNDLE_SOURCE="https://github.com/greenticai/greentic-demo/releases/download/${DEMO_RELEASE_VERSION}/cloud-deploy-demo.gtbundle"
 
-CREATE_ANSWERS_URL="https://github.com/greenticai/greentic-demo/releases/download/${DEMO_RELEASE_VERSION}/cloud-deploy-demo-create-answers.json"
-SETUP_ANSWERS_URL="https://github.com/greenticai/greentic-demo/releases/download/${DEMO_RELEASE_VERSION}/cloud-deploy-demo-setup-answers.json"
-RELEASE_ASSET_BASE="https://github.com/greenticai/greentic-demo/releases/download/${DEMO_RELEASE_VERSION}"
+if [[ "${DEMO_RELEASE_VERSION}" == "latest" ]]; then
+  RELEASE_ASSET_BASE="https://github.com/greenticai/greentic-demo/releases/latest/download"
+else
+  RELEASE_ASSET_BASE="https://github.com/greenticai/greentic-demo/releases/download/${DEMO_RELEASE_VERSION}"
+fi
+
+export GREENTIC_DEPLOY_BUNDLE_SOURCE="${RELEASE_ASSET_BASE}/cloud-deploy-demo.gtbundle"
+
+CREATE_ANSWERS_URL="${RELEASE_ASSET_BASE}/cloud-deploy-demo-create-answers.json"
+SETUP_ANSWERS_URL="${RELEASE_ASSET_BASE}/cloud-deploy-demo-setup-answers.json"
 
 if [[ -z "${WORK_DIR}" ]]; then
   WORK_DIR="$(mktemp -d)"
@@ -321,19 +327,6 @@ rm -rf ./.greentic ./cloud-deploy-demo-bundle ./cloud-deploy-demo.gtbundle
 log ""
 log "Step 1: wizard"
 curl -fsSL "${CREATE_ANSWERS_URL}" -o "${LOCAL_CREATE_ANSWERS}"
-python3 - "${LOCAL_CREATE_ANSWERS}" "${RELEASE_ASSET_BASE}" <<'PY'
-import sys
-from pathlib import Path
-
-answers_path = Path(sys.argv[1])
-release_asset_base = sys.argv[2]
-text = answers_path.read_text(encoding="utf-8")
-text = text.replace(
-    "https://github.com/greenticai/greentic-demo/releases/latest/download/",
-    release_asset_base + "/",
-)
-answers_path.write_text(text, encoding="utf-8")
-PY
 "${GTC_CMD}" wizard --answers "${LOCAL_CREATE_ANSWERS}"
 
 log ""
