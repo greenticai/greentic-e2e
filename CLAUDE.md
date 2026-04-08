@@ -23,11 +23,6 @@ AWS_ACCESS_KEY_ID=... \
 AWS_SECRET_ACCESS_KEY=... \
 ./scripts/run_cloud_demo_e2e.sh
 
-# Optional overrides
-export AWS_REGION='eu-north-1'
-export AWS_DEFAULT_REGION='eu-north-1'
-export GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND='s3'
-
 # Specific scope
 ./scripts/run_provider_e2e.sh --scope messaging
 ./scripts/run_provider_e2e.sh --scope events
@@ -73,7 +68,7 @@ gtc wizard -> gtc setup -> gtc start <bundle_dir> --target aws
 ```
 
 Nightly/manual workflow keeps admin checks opt-in until the released `gtc` artifact includes `gtc admin tunnel`.
-For local runs only `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are required unless you want to override the default region/backend values.
+For local runs only `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are required; AWS region/backend/operator image defaults now come from `greentic-deployer`.
 
 Provider tests accept 2xx-4xx HTTP responses as passing (provider processed the request). Only 5xx or connection failures count as errors.
 
@@ -150,5 +145,5 @@ Full list of all secret env vars is in `.secrets-provider.example`.
 
 - `scripts/run_provider_e2e.sh` - Main local test runner. Uses Perl for cross-platform timeout handling. Cleanup trap kills `greentic-runner` and `nats-server` processes.
 - `scripts/run_cloud_demo_e2e.sh` - AWS cloud demo lifecycle harness. Verifies published `greentic-demo` release assets, web UI route, and optional admin tunnel flow.
-  Defaults: `AWS_REGION/AWS_DEFAULT_REGION=eu-north-1`, `GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND=s3`.
+  Only AWS credentials are required for the standard local path; region/backend/operator image defaults come from `greentic-deployer`.
 - `ci/run_actions.sh` - Runs nightly workflow locally via [nektos/act](https://github.com/nektos/act). Auto-installs `act` to `.bin/`. Resolves Docker host for both macOS (Docker Desktop) and Linux.
