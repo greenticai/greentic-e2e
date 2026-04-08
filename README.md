@@ -27,7 +27,7 @@ AWS cloud demo lifecycle:
 ```bash
 AWS_ACCESS_KEY_ID=... \
 AWS_SECRET_ACCESS_KEY=... \
-./scripts/run_cloud_demo_e2e.sh --release-version v0.1.24
+./scripts/run_cloud_demo_e2e.sh
 ```
 
 Optional overrides:
