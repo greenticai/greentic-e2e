@@ -6,7 +6,7 @@
 #   ./scripts/run_provider_e2e.sh [options]
 #
 # Options:
-#   --scope <all|messaging|events|dummy>  Test scope (default: dummy)
+#   --scope <all|messaging|events|oauth-card|dummy>  Test scope (default: dummy)
 #   --provider <name>                      Test a single provider
 #   --bundle <path>                        Use existing bundle directory
 #   --skip-setup                           Skip setup test
@@ -19,6 +19,7 @@
 #   ./scripts/run_provider_e2e.sh                           # dummy only
 #   ./scripts/run_provider_e2e.sh --scope messaging         # all messaging
 #   ./scripts/run_provider_e2e.sh --scope events            # all events
+#   ./scripts/run_provider_e2e.sh --scope oauth-card        # OAuth card roundtrip
 #   ./scripts/run_provider_e2e.sh --scope all               # everything
 #   ./scripts/run_provider_e2e.sh --provider messaging-telegram
 #
@@ -234,6 +235,7 @@ fi
 ###############################################################################
 MESSAGING_PROVIDERS=""
 EVENT_PROVIDERS=""
+RUN_OAUTH_CARD="false"
 
 if [[ -n "$SINGLE_PROVIDER" ]]; then
   # Single provider mode
@@ -255,12 +257,16 @@ else
     events)
       EVENT_PROVIDERS="$ALL_EVENTS"
       ;;
+    oauth-card)
+      RUN_OAUTH_CARD="true"
+      ;;
     all)
       MESSAGING_PROVIDERS="$ALL_MESSAGING"
       EVENT_PROVIDERS="$ALL_EVENTS"
+      RUN_OAUTH_CARD="true"
       ;;
     *)
-      die "Unknown scope: $TEST_SCOPE (use: dummy, messaging, events, all)"
+      die "Unknown scope: $TEST_SCOPE (use: dummy, messaging, events, oauth-card, all)"
       ;;
   esac
 fi
@@ -278,6 +284,9 @@ if [[ -n "$MESSAGING_PROVIDERS" ]]; then
 fi
 if [[ -n "$EVENT_PROVIDERS" ]]; then
   log "Events:    $(echo "$EVENT_PROVIDERS" | xargs)"
+fi
+if [[ "$RUN_OAUTH_CARD" == "true" ]]; then
+  log "OAuth Card: yes"
 fi
 if [[ "$DRY_RUN" == "true" ]]; then
   log "Mode: DRY RUN"
@@ -546,6 +555,21 @@ if [[ "$SKIP_START" != "true" ]]; then
 else
   log ""
   log "Step 3-6: Skipping start/ingress/stop tests"
+fi
+
+###############################################################################
+# OAuth Card Test
+###############################################################################
+if [[ "$RUN_OAUTH_CARD" == "true" ]]; then
+  log ""
+  log "Running OAuth Card E2E Test..."
+  SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+  if "$SCRIPT_DIR/run_oauth_card_e2e.sh"; then
+    log "PASS: OAuth card e2e test"
+  else
+    log "FAIL: OAuth card e2e test"
+    FAIL_COUNT=$((FAIL_COUNT + 1))
+  fi
 fi
 
 ###############################################################################
