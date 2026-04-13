@@ -8,7 +8,7 @@ End-to-end tests for the Greentic CLI (`gtc`). Two test suites run nightly via G
 
 1. **Nightly Install/Wizard** (`nightly-e2e.yml`, 00:00 UTC) - Tests `gtc install`, `gtc doctor`, and `gtc wizard` across 6 platform/arch combos (Linux x64/arm64, macOS arm64/x64, Windows x64/arm64). Uses `expect` scripts for interactive wizard testing.
 2. **Provider E2E** (`provider-e2e.yml`, 00:30 UTC) - Full provider lifecycle: bundle creation, setup, start, HTTP ingress verification, and shutdown. Tests all messaging and event providers.
-3. **Cloud Demo E2E** (`cloud-demo-e2e.yml`, 02:00 UTC) - Cloud demo lifecycle: `gtc wizard`, `gtc setup`, `gtc start --target <aws|azure|gcp>`, web UI verification, optional admin tunnel verification, and `gtc stop --destroy`.
+3. **Cloud Demo E2E** (`cloud-demo-e2e.yml`, 02:00 UTC) - Cloud demo lifecycle: `gtc wizard`, `gtc setup --no-ui`, `gtc start --target <aws|azure|gcp>`, web UI verification, optional admin tunnel verification, and `gtc stop --destroy`.
 
 ## Running Tests
 
@@ -81,7 +81,7 @@ gtc wizard -> gtc setup --answers <file> <bundle_dir> -> gtc start <bundle_dir> 
 Cloud demo flow under development:
 
 ```
-gtc wizard -> gtc setup -> gtc start <bundle_dir> --target <aws|azure|gcp>
+gtc wizard -> gtc setup --no-ui -> gtc start <bundle_dir> --target <aws|azure|gcp>
 -> GET /readyz -> GET /v1/web/webchat/demo/
 -> optional gtc admin tunnel --target aws -> GET /admin/v1/health
 -> add/remove admin CN -> gtc stop --destroy

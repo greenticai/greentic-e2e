@@ -374,7 +374,7 @@ curl -fsSL "${CREATE_ANSWERS_URL}" -o "${LOCAL_CREATE_ANSWERS}"
 
 log ""
 log "Step 2: setup"
-"${GTC_CMD}" setup ./cloud-deploy-demo-bundle --answers "${SETUP_ANSWERS_URL}"
+"${GTC_CMD}" setup --no-ui ./cloud-deploy-demo-bundle --answers "${SETUP_ANSWERS_URL}"
 
 log ""
 log "Step 3: start ${TARGET} deploy"
