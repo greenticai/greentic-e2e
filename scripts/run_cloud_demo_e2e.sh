@@ -1,22 +1,36 @@
 #!/usr/bin/env bash
 #
-# Local runner for AWS cloud demo E2E.
+# Local runner for cloud demo E2E.
 #
 # Flow:
-#   gtc wizard -> gtc setup -> gtc start --target aws
+#   gtc wizard -> gtc setup -> gtc start --target <aws|azure|gcp>
 #   -> verify /readyz and /v1/web/webchat/demo/
-#   -> optional gtc admin tunnel -> admin health/status/admins add/remove
+#   -> optional gtc admin tunnel (AWS only for now)
 #   -> gtc stop --destroy
 #
-# Required env:
+# Required env for AWS:
 #   AWS_ACCESS_KEY_ID
 #   AWS_SECRET_ACCESS_KEY
 #   AWS_REGION or AWS_DEFAULT_REGION (optional, default: eu-north-1)
+#
+# Required env for Azure:
+#   ARM_SUBSCRIPTION_ID
+#   ARM_TENANT_ID
+#   ARM_CLIENT_ID
+#   ARM_CLIENT_SECRET
+#   GREENTIC_DEPLOY_TERRAFORM_VAR_AZURE_KEY_VAULT_ID
+#
+# Required env for GCP:
+#   GOOGLE_APPLICATION_CREDENTIALS
+#   GREENTIC_DEPLOY_TERRAFORM_VAR_GCP_PROJECT_ID
+#   GREENTIC_DEPLOY_TERRAFORM_VAR_GCP_REGION (optional, default: us-central1)
 #
 # Optional env:
 #   GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND (default: s3)
 #   AWS_REGION (default: eu-north-1)
 #   AWS_DEFAULT_REGION (default: value of AWS_REGION)
+#   GREENTIC_DEPLOY_TERRAFORM_VAR_AZURE_LOCATION (default: westeurope)
+#   GREENTIC_DEPLOY_TERRAFORM_VAR_GCP_REGION (default: us-central1)
 #   DEMO_RELEASE_VERSION (default: latest)
 #   WEBCHAT_EXPECTED_PATH (default: /v1/web/webchat/demo/)
 #
@@ -28,6 +42,7 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DEMO_RELEASE_VERSION="${DEMO_RELEASE_VERSION:-latest}"
 WEBCHAT_EXPECTED_PATH="${WEBCHAT_EXPECTED_PATH:-/v1/web/webchat/demo/}"
 GTC_CMD="${GTC_CMD:-gtc}"
+TARGET="${TARGET:-aws}"
 SKIP_ADMIN="${SKIP_ADMIN:-false}"
 KEEP_RUNNING="${KEEP_RUNNING:-false}"
 VERBOSE="${VERBOSE:-false}"
@@ -49,6 +64,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --bundle-dir)
       WORK_DIR="$2"
+      shift 2
+      ;;
+    --target)
+      TARGET="$2"
       shift 2
       ;;
     --skip-admin)
@@ -272,9 +291,9 @@ cleanup() {
   if [[ "$KEEP_RUNNING" != "true" ]] && [[ -n "${WORK_DIR}" ]] && [[ -d "${WORK_DIR}/cloud-deploy-demo-bundle" ]]; then
     (
       cd "${WORK_DIR}" || exit 0
-      "${GTC_CMD}" stop ./cloud-deploy-demo-bundle --target aws --destroy >>"${STOP_LOG}" 2>&1 || true
+      "${GTC_CMD}" stop ./cloud-deploy-demo-bundle --target "${TARGET}" --destroy >>"${STOP_LOG}" 2>&1 || true
 
-      if [[ -d "${WORK_DIR}/.greentic/deploy/aws" ]]; then
+      if [[ "${TARGET}" == "aws" ]] && [[ -d "${WORK_DIR}/.greentic/deploy/aws" ]]; then
         while IFS= read -r cleanup_script; do
           [[ -n "${cleanup_script}" ]] || continue
           bash "${cleanup_script}" >>"${STOP_LOG}" 2>&1 || true
@@ -287,11 +306,35 @@ cleanup() {
 trap cleanup EXIT
 
 command -v "${GTC_CMD}" >/dev/null 2>&1 || die "gtc not found: ${GTC_CMD}"
-require_env AWS_ACCESS_KEY_ID
-require_env AWS_SECRET_ACCESS_KEY
-export AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-eu-north-1}}"
-export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-${AWS_REGION}}"
-export GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND="${GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND:-s3}"
+case "${TARGET}" in
+  aws)
+    require_env AWS_ACCESS_KEY_ID
+    require_env AWS_SECRET_ACCESS_KEY
+    export AWS_REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-eu-north-1}}"
+    export AWS_DEFAULT_REGION="${AWS_DEFAULT_REGION:-${AWS_REGION}}"
+    export GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND="${GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND:-s3}"
+    ;;
+  azure)
+    require_env ARM_SUBSCRIPTION_ID
+    require_env ARM_TENANT_ID
+    require_env ARM_CLIENT_ID
+    require_env ARM_CLIENT_SECRET
+    require_env GREENTIC_DEPLOY_TERRAFORM_VAR_AZURE_KEY_VAULT_ID
+    export GREENTIC_DEPLOY_TERRAFORM_VAR_AZURE_LOCATION="${GREENTIC_DEPLOY_TERRAFORM_VAR_AZURE_LOCATION:-westeurope}"
+    export GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND="${GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND:-azurerm}"
+    SKIP_ADMIN=true
+    ;;
+  gcp)
+    require_env GOOGLE_APPLICATION_CREDENTIALS
+    require_env GREENTIC_DEPLOY_TERRAFORM_VAR_GCP_PROJECT_ID
+    export GREENTIC_DEPLOY_TERRAFORM_VAR_GCP_REGION="${GREENTIC_DEPLOY_TERRAFORM_VAR_GCP_REGION:-us-central1}"
+    export GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND="${GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND:-gcs}"
+    SKIP_ADMIN=true
+    ;;
+  *)
+    die "unsupported target: ${TARGET} (expected aws, azure or gcp)"
+    ;;
+esac
 
 if [[ "${DEMO_RELEASE_VERSION}" == "latest" ]]; then
   RELEASE_ASSET_BASE="https://github.com/greenticai/greentic-demo/releases/latest/download"
@@ -314,8 +357,8 @@ START_LOG="${WORK_DIR}/gtc-start.log"
 TUNNEL_LOG="${WORK_DIR}/gtc-admin-tunnel.log"
 STOP_LOG="${WORK_DIR}/gtc-stop.log"
 
-log "Cloud Demo AWS E2E"
-log "=================="
+log "Cloud Demo ${TARGET^^} E2E"
+log "===================="
 log "Release: ${DEMO_RELEASE_VERSION}"
 log "Work dir: ${WORK_DIR}"
 log "gtc: $(command -v "${GTC_CMD}")"
@@ -331,13 +374,23 @@ curl -fsSL "${CREATE_ANSWERS_URL}" -o "${LOCAL_CREATE_ANSWERS}"
 
 log ""
 log "Step 2: setup"
-"${GTC_CMD}" setup ./cloud-deploy-demo-bundle --answers "${SETUP_ANSWERS_URL}"
+"${GTC_CMD}" setup --no-ui ./cloud-deploy-demo-bundle --answers "${SETUP_ANSWERS_URL}"
 
 log ""
-log "Step 3: start aws deploy"
-"${GTC_CMD}" start ./cloud-deploy-demo-bundle --target aws | tee "${START_LOG}"
+log "Step 3: start ${TARGET} deploy"
+"${GTC_CMD}" start ./cloud-deploy-demo-bundle --target "${TARGET}" | tee "${START_LOG}"
 
-OPERATOR_ENDPOINT="$(grep -o 'http://[^"]*elb[^"]*amazonaws.com' "${START_LOG}" | tail -n 1 || true)"
+case "${TARGET}" in
+  aws)
+    OPERATOR_ENDPOINT="$(grep -o 'http://[^"]*elb[^"]*amazonaws.com' "${START_LOG}" | tail -n 1 || true)"
+    ;;
+  azure)
+    OPERATOR_ENDPOINT="$(grep -Eo 'https://[^[:space:]]+azurecontainerapps\.io' "${START_LOG}" | tail -n 1 || true)"
+    ;;
+  gcp)
+    OPERATOR_ENDPOINT="$(grep -Eo 'https://[^[:space:]]+\.a\.run\.app' "${START_LOG}" | tail -n 1 || true)"
+    ;;
+esac
 [[ -n "${OPERATOR_ENDPOINT}" ]] || die "failed to parse operator endpoint from ${START_LOG}"
 log "Operator endpoint: ${OPERATOR_ENDPOINT}"
 
@@ -365,7 +418,13 @@ log "PASS: ${WEBCHAT_EXPECTED_PATH} -> 200"
 
 if [[ "${SKIP_ADMIN}" == "true" ]]; then
   log ""
-  log "Step 6: skipping admin (--skip-admin)"
+  if [[ "${TARGET}" == "azure" ]]; then
+    log "Step 6: skipping admin (not yet supported for azure)"
+  elif [[ "${TARGET}" == "gcp" ]]; then
+    log "Step 6: skipping admin (not yet supported for gcp)"
+  else
+    log "Step 6: skipping admin (--skip-admin)"
+  fi
 else
   log ""
   log "Step 6: admin tunnel"
@@ -438,7 +497,7 @@ fi
 
 log ""
 log "Step 7: destroy"
-"${GTC_CMD}" stop ./cloud-deploy-demo-bundle --target aws --destroy
+"${GTC_CMD}" stop ./cloud-deploy-demo-bundle --target "${TARGET}" --destroy
 
 trap - EXIT
 log ""
