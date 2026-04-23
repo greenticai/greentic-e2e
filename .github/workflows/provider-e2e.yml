@@ -54,6 +54,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install system dependencies
+        shell: bash
+        run: |
+          # greentic-bundle's `wizard apply` needs mksquashfs to emit the
+          # .gtbundle artefact. Not preinstalled on either GHA runner.
+          set -euo pipefail
+          case "$(uname -s)" in
+            Linux)
+              sudo apt-get update -qq
+              sudo apt-get install -y -qq squashfs-tools jq lsof
+              ;;
+            Darwin)
+              brew install squashfs jq 2>/dev/null || brew upgrade squashfs jq || true
+              ;;
+          esac
+
       - name: Bootstrap toolchain
         shell: bash
         run: |
