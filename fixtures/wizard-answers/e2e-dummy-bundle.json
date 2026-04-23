@@ -1,0 +1,58 @@
+{
+  "wizard_id": "greentic-dev.wizard.launcher.main",
+  "schema_id": "greentic-dev.launcher.main",
+  "schema_version": "1.0.0",
+  "locale": "en-GB",
+  "answers": {
+    "selected_action": "bundle",
+    "delegate_answer_document": {
+      "wizard_id": "greentic-bundle.wizard.run",
+      "schema_id": "greentic-bundle.wizard.answers",
+      "schema_version": "1.0.0",
+      "locale": "en-GB",
+      "answers": {
+        "advanced_setup": false,
+        "app_pack_entries": [],
+        "app_packs": [],
+        "bundle_id": "e2e-dummy-bundle",
+        "bundle_name": "e2e-dummy-bundle",
+        "export_intent": false,
+        "extension_provider_entries": [
+          {
+            "detected_kind": "oci",
+            "display_name": "Greentic Messaging Dummy (latest)",
+            "provider_id": "messaging-dummy",
+            "reference": "oci://ghcr.io/greenticai/packs/messaging/messaging-dummy:latest",
+            "version": "latest"
+          },
+          {
+            "detected_kind": "oci",
+            "display_name": "Greentic Events Dummy (latest)",
+            "provider_id": "events-dummy",
+            "reference": "oci://ghcr.io/greenticai/packs/events/events-dummy:latest",
+            "version": "latest"
+          }
+        ],
+        "extension_providers": [
+          "oci://ghcr.io/greenticai/packs/messaging/messaging-dummy:latest",
+          "oci://ghcr.io/greenticai/packs/events/events-dummy:latest"
+        ],
+        "mode": "create",
+        "output_dir": "{{BUNDLE_DIR}}",
+        "remote_catalogs": [],
+        "setup_answers": {},
+        "setup_execution_intent": false,
+        "setup_specs": {}
+      },
+      "locks": {
+        "cache_policy": "workspace-local",
+        "catalogs": [],
+        "execution": "execute",
+        "lock_file": "bundle.lock.json",
+        "requested_mode": "create",
+        "setup_state_files": [],
+        "workspace_root": "bundle.yaml"
+      }
+    }
+  }
+}
