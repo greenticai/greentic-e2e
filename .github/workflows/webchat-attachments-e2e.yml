@@ -1,0 +1,120 @@
+name: WebChat Attachments E2E
+
+# Regression guard for TASK-082 Bug 3 / Bug 4 (DirectLine attachments /
+# channelData / entities passthrough). Runs the full stack
+# (greentic-start + runner + messaging-webchat-gui) against Paul's probe pack
+# and asserts the bot activity carries exactly 1 attachment with channelData
+# and entities intact.
+#
+# Why this exists separately from `provider-e2e.yml`: that workflow tests
+# lifecycle and HTTP ingress but not the attachments passthrough contract,
+# which has regressed three times in the last two weeks across three repos
+# (messaging-providers v0.4.84 encode refactor, greentic-start 0.5.3 routing,
+# and one earlier drop). An e2e test that walks the full wire path catches
+# that class of bug regardless of which repo breaks it.
+
+on:
+  schedule:
+    # 01:00 UTC — between nightly-e2e (00:00) and provider-e2e (00:30) to
+    # avoid overlapping GHA runner contention.
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      gtc_version:
+        description: "gtc version (default: latest)"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
+
+jobs:
+  webchat-attachments:
+    name: WebChat DirectLine attachments passthrough
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        shell: bash
+        run: |
+          # squashfs-tools: greentic-bundle needs mksquashfs to emit .gtbundle.
+          # jq, lsof, curl: used by the e2e driver script.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq squashfs-tools jq lsof curl
+
+      - name: Bootstrap Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --profile minimal --default-toolchain 1.95.0
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Install cargo-binstall + cargo-component
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
+          curl -L --proto '=https' --tlsv1.2 -sSf \
+            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
+            | bash
+          cargo binstall -y cargo-component
+
+      - name: Install Greentic CLIs
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
+          if [[ -z "${GTC_VERSION}" || "${GTC_VERSION}" == "latest" ]]; then
+            cargo binstall -y gtc
+          else
+            cargo binstall -y "gtc@${GTC_VERSION}"
+          fi
+          cargo binstall -y greentic-start greentic-secrets greentic-pack
+          gtc --version
+          gtc install
+
+      - name: Run WebChat attachments e2e
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
+          # Keep the generated bundle on failure so the next step can stage
+          # the runtime log + wire response as an artifact.
+          KEEP_BUNDLE=1 bash scripts/run_webchat_attachments_e2e.sh
+
+      - name: Stage diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Glob in /tmp doesn't always resolve inside upload-artifact@v4 on
+          # self-hosted / containerised runners; copy to a known workspace
+          # path first, then upload from there.
+          mkdir -p ./diagnostics
+          for d in /tmp/greentic-webchat-attach-*/; do
+            [ -d "$d" ] || continue
+            name="$(basename "$d")"
+            cp -r "$d" "./diagnostics/${name}/" 2>/dev/null || true
+          done
+          find ./diagnostics -type f | head
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: webchat-attachments-diagnostics
+          path: ./diagnostics
+          if-no-files-found: warn
+          retention-days: 7
