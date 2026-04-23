@@ -69,17 +69,17 @@ jobs:
           if ! command -v rustup >/dev/null 2>&1; then
             if [[ "${{ runner.os }}" == "Windows" ]]; then
               curl -fsSL -o rustup-init.exe https://win.rustup.rs/x86_64
-              ./rustup-init.exe -y --profile minimal --default-toolchain 1.91.0
+              ./rustup-init.exe -y --profile minimal --default-toolchain 1.95.0
               export PATH="$HOME/.cargo/bin:$PATH"
             else
-              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.91.0
+              curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95.0
               export PATH="$HOME/.cargo/bin:$PATH"
             fi
           fi
 
-          rustup toolchain install 1.91.0 --profile minimal
-          rustup default 1.91.0
-          rustup target add wasm32-wasip2 --toolchain 1.91.0
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+          rustup target add wasm32-wasip2 --toolchain 1.95.0
 
           rustc --version
           cargo --version
