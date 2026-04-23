@@ -1,0 +1,50 @@
+{
+  "wizard_id": "greentic-dev.wizard.launcher.main",
+  "schema_id": "greentic-dev.launcher.main",
+  "schema_version": "1.0.0",
+  "locale": "en-GB",
+  "answers": {
+    "selected_action": "bundle",
+    "delegate_answer_document": {
+      "wizard_id": "greentic-bundle.wizard.run",
+      "schema_id": "greentic-bundle.wizard.answers",
+      "schema_version": "1.0.0",
+      "locale": "en-GB",
+      "answers": {
+        "advanced_setup": false,
+        "app_pack_entries": [],
+        "app_packs": [],
+        "bundle_id": "e2e-{{PROVIDER}}",
+        "bundle_name": "e2e-{{PROVIDER}}",
+        "export_intent": false,
+        "extension_provider_entries": [
+          {
+            "detected_kind": "oci",
+            "display_name": "{{PROVIDER}} (latest)",
+            "provider_id": "{{PROVIDER}}",
+            "reference": "oci://ghcr.io/greenticai/packs/messaging/{{PROVIDER}}:latest",
+            "version": "latest"
+          }
+        ],
+        "extension_providers": [
+          "oci://ghcr.io/greenticai/packs/messaging/{{PROVIDER}}:latest"
+        ],
+        "mode": "create",
+        "output_dir": "{{BUNDLE_DIR}}",
+        "remote_catalogs": [],
+        "setup_answers": {},
+        "setup_execution_intent": false,
+        "setup_specs": {}
+      },
+      "locks": {
+        "cache_policy": "workspace-local",
+        "catalogs": [],
+        "execution": "execute",
+        "lock_file": "bundle.lock.json",
+        "requested_mode": "create",
+        "setup_state_files": [],
+        "workspace_root": "bundle.yaml"
+      }
+    }
+  }
+}
