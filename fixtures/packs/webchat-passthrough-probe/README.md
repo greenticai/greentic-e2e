@@ -1,4 +1,4 @@
-# bug3-attachments-probe
+# webchat-passthrough-probe
 
 Minimal app-pack that emits exactly **1 Adaptive Card attachment** plus
 `channelData` and `entities` from its flow output. Used as a regression probe
@@ -37,5 +37,5 @@ Adaptive Card content remain the canonical assertion target.
 ## Run via E2E suite
 
 ```bash
-./scripts/run_webchat_attachments_e2e.sh
+./scripts/run_webchat_passthrough_e2e.sh
 ```

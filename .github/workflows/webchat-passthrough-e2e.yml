@@ -1,17 +1,18 @@
-name: WebChat Attachments E2E
+name: WebChat Passthrough E2E
 
-# Regression guard for TASK-082 Bug 3 / Bug 4 (DirectLine attachments /
-# channelData / entities passthrough). Runs the full stack
-# (greentic-start + runner + messaging-webchat-gui) against Paul's probe pack
-# and asserts the bot activity carries exactly 1 attachment with channelData
-# and entities intact.
+# Regression guard for the WebChat DirectLine envelope passthrough
+# contract (attachments / channelData / entities). Runs the full stack
+# (greentic-start + runner + messaging-webchat-gui) against a minimal
+# probe pack and asserts the bot activity carries exactly 1 attachment
+# with channelData and entities intact — catches the "stripped" regression
+# (historically TASK-082 Bug 3) and the "duplicated" regression
+# (TASK-082 Bug 4) and any future shape drift in the same class.
 #
 # Why this exists separately from `provider-e2e.yml`: that workflow tests
-# lifecycle and HTTP ingress but not the attachments passthrough contract,
-# which has regressed three times in the last two weeks across three repos
-# (messaging-providers v0.4.84 encode refactor, greentic-start 0.5.3 routing,
-# and one earlier drop). An e2e test that walks the full wire path catches
-# that class of bug regardless of which repo breaks it.
+# lifecycle and HTTP ingress but not the passthrough contract, which has
+# regressed repeatedly in 2026-04 across three repos. An e2e test that
+# walks the full wire path catches that class of bug regardless of which
+# repo breaks it.
 
 on:
   schedule:
@@ -36,8 +37,8 @@ env:
   GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
 
 jobs:
-  webchat-attachments:
-    name: WebChat DirectLine attachments passthrough
+  webchat-passthrough:
+    name: WebChat DirectLine passthrough
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -92,7 +93,7 @@ jobs:
           export PATH="$HOME/.cargo/bin:$PATH"
           # Keep the generated bundle on failure so the next step can stage
           # the runtime log + wire response as an artifact.
-          KEEP_BUNDLE=1 bash scripts/run_webchat_attachments_e2e.sh
+          KEEP_BUNDLE=1 bash scripts/run_webchat_passthrough_e2e.sh
 
       - name: Stage diagnostics on failure
         if: failure()
@@ -114,7 +115,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: webchat-attachments-diagnostics
+          name: webchat-passthrough-diagnostics
           path: ./diagnostics
           if-no-files-found: warn
           retention-days: 7
