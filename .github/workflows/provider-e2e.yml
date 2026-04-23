@@ -270,6 +270,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check required secrets
+        id: secrets
         shell: bash
         env:
           PROVIDER: ${{ matrix.provider }}
@@ -285,32 +286,48 @@ jobs:
           MS_GRAPH_CLIENT_SECRET: ${{ secrets.MS_GRAPH_CLIENT_SECRET }}
           WEBCHAT_JWT_SIGNING_KEY: ${{ secrets.WEBCHAT_JWT_SIGNING_KEY }}
         run: |
+          # Report missing credentials as a skip signal instead of a hard
+          # failure. Nightly runs on repos that don't have provider secrets
+          # wired up (which is every repo by default) should surface a
+          # "skipped — no credentials" result rather than a red workflow
+          # status for something no one can fix without admin access to
+          # the secrets store. Set present=false on miss; downstream steps
+          # gate on that output.
+          present=true
+          reason=""
           case "$PROVIDER" in
             messaging-telegram)
-              [[ -n "$TELEGRAM_BOT_TOKEN" ]] || { echo "Missing TELEGRAM_BOT_TOKEN"; exit 1; }
+              [[ -n "$TELEGRAM_BOT_TOKEN" ]] || { present=false; reason="TELEGRAM_BOT_TOKEN"; }
               ;;
             messaging-slack)
-              [[ -n "$SLACK_BOT_TOKEN" ]] || { echo "Missing SLACK_BOT_TOKEN"; exit 1; }
+              [[ -n "$SLACK_BOT_TOKEN" ]] || { present=false; reason="SLACK_BOT_TOKEN"; }
               ;;
             messaging-teams)
-              [[ -n "$MS_BOT_APP_ID" && -n "$MS_BOT_APP_PASSWORD" ]] || { echo "Missing Teams secrets"; exit 1; }
+              [[ -n "$MS_BOT_APP_ID" && -n "$MS_BOT_APP_PASSWORD" ]] || { present=false; reason="MS_BOT_APP_ID / MS_BOT_APP_PASSWORD"; }
               ;;
             messaging-webex)
-              [[ -n "$WEBEX_BOT_TOKEN" ]] || { echo "Missing WEBEX_BOT_TOKEN"; exit 1; }
+              [[ -n "$WEBEX_BOT_TOKEN" ]] || { present=false; reason="WEBEX_BOT_TOKEN"; }
               ;;
             messaging-whatsapp)
-              [[ -n "$WHATSAPP_TOKEN" && -n "$WHATSAPP_PHONE_NUMBER_ID" ]] || { echo "Missing WhatsApp secrets"; exit 1; }
+              [[ -n "$WHATSAPP_TOKEN" && -n "$WHATSAPP_PHONE_NUMBER_ID" ]] || { present=false; reason="WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID"; }
               ;;
             messaging-email)
-              [[ -n "$MS_GRAPH_CLIENT_ID" && -n "$MS_GRAPH_CLIENT_SECRET" ]] || { echo "Missing Email secrets"; exit 1; }
+              [[ -n "$MS_GRAPH_CLIENT_ID" && -n "$MS_GRAPH_CLIENT_SECRET" ]] || { present=false; reason="MS_GRAPH_CLIENT_ID / MS_GRAPH_CLIENT_SECRET"; }
               ;;
             messaging-webchat-gui)
-              [[ -n "$WEBCHAT_JWT_SIGNING_KEY" ]] || { echo "Missing WEBCHAT_JWT_SIGNING_KEY"; exit 1; }
+              [[ -n "$WEBCHAT_JWT_SIGNING_KEY" ]] || { present=false; reason="WEBCHAT_JWT_SIGNING_KEY"; }
               ;;
           esac
-          echo "Required secrets present for $PROVIDER"
+
+          echo "present=${present}" >> "$GITHUB_OUTPUT"
+          if [[ "$present" == "true" ]]; then
+            echo "Required secrets present for ${PROVIDER}"
+          else
+            echo "::warning::Skipping ${PROVIDER} — missing ${reason}. Configure the secrets in repo settings to enable this matrix entry."
+          fi
 
       - name: Bootstrap toolchain
+        if: steps.secrets.outputs.present == 'true'
         shell: bash
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95.0
@@ -320,6 +337,7 @@ jobs:
           gtc install
 
       - name: Prepare and start services
+        if: steps.secrets.outputs.present == 'true'
         shell: bash
         env:
           PROVIDER: ${{ matrix.provider }}
@@ -400,6 +418,7 @@ jobs:
           fi
 
       - name: "Test: messaging ingress"
+        if: steps.secrets.outputs.present == 'true'
         shell: bash
         env:
           PROVIDER: ${{ matrix.provider }}
@@ -495,6 +514,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check required secrets
+        id: secrets
         shell: bash
         env:
           PROVIDER: ${{ matrix.provider }}
@@ -502,19 +522,29 @@ jobs:
           TWILIO_ACCOUNT_SID: ${{ secrets.TWILIO_ACCOUNT_SID }}
           TWILIO_AUTH_TOKEN: ${{ secrets.TWILIO_AUTH_TOKEN }}
         run: |
+          # Same pattern as messaging-providers: missing secrets → skip
+          # signal (present=false), not hard fail. Downstream steps gate
+          # on the output.
+          present=true
+          reason=""
           case "$PROVIDER" in
             events-webhook|events-timer)
               echo "No secrets required for $PROVIDER"
               ;;
             events-email-sendgrid)
-              [[ -n "$SENDGRID_API_KEY" ]] || { echo "Missing SENDGRID_API_KEY"; exit 1; }
+              [[ -n "$SENDGRID_API_KEY" ]] || { present=false; reason="SENDGRID_API_KEY"; }
               ;;
             events-sms-twilio)
-              [[ -n "$TWILIO_ACCOUNT_SID" && -n "$TWILIO_AUTH_TOKEN" ]] || { echo "Missing Twilio secrets"; exit 1; }
+              [[ -n "$TWILIO_ACCOUNT_SID" && -n "$TWILIO_AUTH_TOKEN" ]] || { present=false; reason="TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN"; }
               ;;
           esac
+          echo "present=${present}" >> "$GITHUB_OUTPUT"
+          if [[ "$present" != "true" ]]; then
+            echo "::warning::Skipping ${PROVIDER} — missing ${reason}. Configure the secrets in repo settings to enable this matrix entry."
+          fi
 
       - name: Bootstrap toolchain
+        if: steps.secrets.outputs.present == 'true'
         shell: bash
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95.0
@@ -524,6 +554,7 @@ jobs:
           gtc install
 
       - name: Prepare and start services
+        if: steps.secrets.outputs.present == 'true'
         shell: bash
         env:
           PROVIDER: ${{ matrix.provider }}
@@ -594,7 +625,7 @@ jobs:
           fi
 
       - name: "Test: event ingress"
-        if: matrix.provider != 'events-timer'
+        if: steps.secrets.outputs.present == 'true' && matrix.provider != 'events-timer'
         shell: bash
         env:
           PROVIDER: ${{ matrix.provider }}
@@ -648,7 +679,7 @@ jobs:
           fi
 
       - name: "Test: timer is scheduled"
-        if: matrix.provider == 'events-timer'
+        if: steps.secrets.outputs.present == 'true' && matrix.provider == 'events-timer'
         shell: bash
         run: |
           echo "events-timer uses scheduled triggers, not HTTP ingress"
