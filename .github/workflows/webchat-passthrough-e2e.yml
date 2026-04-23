@@ -56,10 +56,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # GHA ubuntu-24.04 runners ship rustup with `stable` (currently
+          # 1.94.1) pre-installed, so a `command -v rustup` guard would
+          # skip our install and leave 1.94 active. greentic-interfaces
+          # 0.5.0 requires 1.95, so pin explicitly regardless of whether
+          # rustup is pre-installed.
           if ! command -v rustup >/dev/null 2>&1; then
             curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
               | sh -s -- -y --profile minimal --default-toolchain 1.95.0
           fi
+          export PATH="$HOME/.cargo/bin:$PATH"
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+          rustc --version
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
 
       - name: Install cargo-binstall + cargo-component
@@ -86,7 +95,7 @@ jobs:
           gtc --version
           gtc install
 
-      - name: Run WebChat attachments e2e
+      - name: Run WebChat passthrough e2e
         shell: bash
         run: |
           set -euo pipefail
