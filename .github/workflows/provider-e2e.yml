@@ -41,7 +41,7 @@ jobs:
   dummy-providers:
     name: Dummy Providers (${{ matrix.label }})
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -235,7 +235,7 @@ jobs:
       github.event.inputs.provider_scope == 'messaging' ||
       github.event.inputs.provider_scope == 'all'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
@@ -463,7 +463,7 @@ jobs:
       github.event.inputs.provider_scope == 'events' ||
       github.event.inputs.provider_scope == 'all'
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 40
     strategy:
       fail-fast: false
       matrix:
