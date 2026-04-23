@@ -360,23 +360,30 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Install system deps needed by greentic-bundle's wizard apply.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq squashfs-tools jq lsof
+
           ROOT="$(mktemp -d)"
           echo "E2E_ROOT=${ROOT}" >> "$GITHUB_ENV"
 
           BUNDLE_DIR="${ROOT}/bundle"
           mkdir -p "${BUNDLE_DIR}"
 
-          # Create bundle
-          cat > "${BUNDLE_DIR}/greentic.demo.yaml" <<EOF
-          id: ai.greentic.e2e.${PROVIDER}
-          name: E2E ${PROVIDER} Test
-          version: 0.1.0
-
-          providers:
-            messaging:
-              ${PROVIDER}:
-                pack: "oci://ghcr.io/greenticai/packs/messaging/${PROVIDER}:latest"
-          EOF
+          # Create bundle via gtc wizard (modern schema_version:1 bundle.yaml).
+          # The legacy `providers: { messaging: { <name>: { pack: ... } } }`
+          # shape is no longer parsed by gtc start, so the runtime silently
+          # binds no ingress. Render the parametrised fixture, then hand off
+          # to gtc wizard to emit the normalised bundle.
+          ANSWERS="${ROOT}/wizard-answers.json"
+          python3 - <<PY
+          import pathlib
+          tpl = pathlib.Path("fixtures/wizard-answers/e2e-messaging-provider.json").read_text()
+          tpl = tpl.replace("{{PROVIDER}}", "${PROVIDER}")
+          tpl = tpl.replace("{{BUNDLE_DIR}}", "${BUNDLE_DIR}")
+          pathlib.Path("${ANSWERS}").write_text(tpl)
+          PY
+          gtc wizard --answers "${ANSWERS}"
 
           # Create setup answers from fixture with env substitution
           envsubst < "fixtures/setup-answers/${PROVIDER}.json" > "${ROOT}/setup-answers.json"
@@ -567,23 +574,25 @@ jobs:
         run: |
           set -euo pipefail
 
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq squashfs-tools jq lsof
+
           ROOT="$(mktemp -d)"
           echo "E2E_ROOT=${ROOT}" >> "$GITHUB_ENV"
 
           BUNDLE_DIR="${ROOT}/bundle"
           mkdir -p "${BUNDLE_DIR}"
 
-          # Create bundle
-          cat > "${BUNDLE_DIR}/greentic.demo.yaml" <<EOF
-          id: ai.greentic.e2e.${PROVIDER}
-          name: E2E ${PROVIDER} Test
-          version: 0.1.0
-
-          providers:
-            events:
-              ${PROVIDER}:
-                pack: "oci://ghcr.io/greenticai/packs/events/${PROVIDER}:latest"
-          EOF
+          # Create bundle via gtc wizard (modern schema_version:1 bundle.yaml).
+          ANSWERS="${ROOT}/wizard-answers.json"
+          python3 - <<PY
+          import pathlib
+          tpl = pathlib.Path("fixtures/wizard-answers/e2e-events-provider.json").read_text()
+          tpl = tpl.replace("{{PROVIDER}}", "${PROVIDER}")
+          tpl = tpl.replace("{{BUNDLE_DIR}}", "${BUNDLE_DIR}")
+          pathlib.Path("${ANSWERS}").write_text(tpl)
+          PY
+          gtc wizard --answers "${ANSWERS}"
 
           # Create setup answers from fixture with env substitution
           envsubst < "fixtures/setup-answers/${PROVIDER}.json" > "${ROOT}/setup-answers.json"
