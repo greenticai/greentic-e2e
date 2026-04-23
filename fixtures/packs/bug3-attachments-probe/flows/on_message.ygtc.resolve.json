@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "flow": "on_message.ygtc",
+  "nodes": {
+    "com_example_bug3-test": {
+      "source": {
+        "kind": "local",
+        "path": "file://../components/bug3-test/target/wasm32-wasip2/release/bug3_test.wasm"
+      }
+    }
+  }
+}
