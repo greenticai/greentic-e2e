@@ -8,7 +8,7 @@
 #     more byte-identical entries).
 #
 # The probe flow emits exactly 1 Adaptive Card attachment + channelData +
-# entities from `fixtures/packs/bug3-attachments-probe`. After round-tripping
+# entities from `fixtures/packs/webchat-passthrough-probe`. After round-tripping
 # through greentic-start → runner → messaging-webchat-gui provider → DirectLine
 # state store → GET /activities, the test asserts the activity carries exactly
 # one attachment with the original SHA-256 and the channelData / entities
@@ -19,7 +19,7 @@
 # contract, and attachments-passthrough has regressed three times in 2026-04.
 #
 # Usage:
-#   ./scripts/run_webchat_attachments_e2e.sh
+#   ./scripts/run_webchat_passthrough_e2e.sh
 #
 # Options (env):
 #   PORT            HTTP port for greentic-start (default 8091)
@@ -30,8 +30,8 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURES_DIR="${ROOT_DIR}/fixtures"
-PROBE_PACK_SRC="${FIXTURES_DIR}/packs/bug3-attachments-probe"
-ANSWERS_TEMPLATE="${FIXTURES_DIR}/wizard-answers/webchat-attachments-bundle.json"
+PROBE_PACK_SRC="${FIXTURES_DIR}/packs/webchat-passthrough-probe"
+ANSWERS_TEMPLATE="${FIXTURES_DIR}/wizard-answers/webchat-passthrough-bundle.json"
 # greentic-start 0.5.x binds HTTP to a bundle-derived port (default 8080) and
 # does not expose a --port flag; override via env var isn't supported either.
 # Hard-code here; the preflight check guards against a conflict.
