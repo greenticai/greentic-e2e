@@ -1,0 +1,14 @@
+id: on_message
+title: Bug 3 Probe
+description: Emits an Adaptive Card envelope to probe attachment passthrough
+type: messaging
+start: com_example_bug3-test
+parameters: {}
+tags: []
+schema_version: 2
+entrypoints: {}
+nodes:
+  com_example_bug3-test:
+    routing: out
+    probe:
+      text: '{{in.input.text}}'
