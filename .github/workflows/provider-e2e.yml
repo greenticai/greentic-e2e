@@ -97,10 +97,10 @@ jobs:
           providers:
             messaging:
               messaging-dummy:
-                pack: "oci://ghcr.io/greentic-biz/packs/messaging-dummy:latest"
+                pack: "oci://ghcr.io/greenticai/packs/messaging/messaging-dummy:latest"
             events:
               events-dummy:
-                pack: "oci://ghcr.io/greentic-biz/packs/events-dummy:latest"
+                pack: "oci://ghcr.io/greenticai/packs/events/events-dummy:latest"
           EOF
 
       - name: Setup providers
@@ -339,7 +339,7 @@ jobs:
           providers:
             messaging:
               ${PROVIDER}:
-                pack: "oci://ghcr.io/greentic-biz/packs/${PROVIDER}:latest"
+                pack: "oci://ghcr.io/greenticai/packs/messaging/${PROVIDER}:latest"
           EOF
 
           # Create setup answers from fixture with env substitution
@@ -533,7 +533,7 @@ jobs:
           providers:
             events:
               ${PROVIDER}:
-                pack: "oci://ghcr.io/greentic-biz/packs/${PROVIDER}:latest"
+                pack: "oci://ghcr.io/greenticai/packs/events/${PROVIDER}:latest"
           EOF
 
           # Create setup answers from fixture with env substitution
