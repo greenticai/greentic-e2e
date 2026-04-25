@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "flow": "on_message.ygtc",
+  "nodes": {
+    "com_example_extensions-probe": {
+      "component_id": "com.example.extensions-probe",
+      "source": {
+        "kind": "local",
+        "path": "../components/extensions-probe/target/wasm32-wasip2/release/extensions_probe.wasm"
+      },
+      "digest": "sha256:1a4bf4887b467b095b68009b8bdf70d43dd010a982c1cdba61cb97b2284afc3b",
+      "manifest": {
+        "world": "greentic:component/component@0.6.0",
+        "version": "0.1.0"
+      }
+    }
+  }
+}

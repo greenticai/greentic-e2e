@@ -1,0 +1,12 @@
+pack_id: ai.greentic.e2e.builtin-only-flow
+version: 0.1.0
+kind: application
+publisher: Greentic E2E
+components: []
+flows:
+  - id: main
+    file: flows/main.ygtc
+    tags: [default]
+    entrypoints: [default]
+dependencies: []
+assets: []

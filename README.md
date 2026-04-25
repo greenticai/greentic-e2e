@@ -23,6 +23,17 @@ Provider lifecycle:
 ./scripts/run_provider_e2e.sh
 ```
 
+Regression scripts (pin specific historical fixes; see
+`scripts/regression/` and `updates/<date>/greentic-e2e.md` for context):
+```bash
+# Always-on (builds two minimal fixture packs)
+./scripts/regression/emit_response_build.sh
+
+# Full e2e regressions (skip-by-default, gated behind RUN_E2E=1)
+RUN_E2E=1 ./scripts/regression/extensions_passthrough.sh
+RUN_E2E=1 ./scripts/regression/null_template_handling.sh
+```
+
 AWS cloud demo lifecycle:
 ```bash
 AWS_ACCESS_KEY_ID=... \

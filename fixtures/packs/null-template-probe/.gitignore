@@ -1,0 +1,3 @@
+/components/*/target/
+/components/*/Cargo.lock
+/dist/

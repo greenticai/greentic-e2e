@@ -1,0 +1,14 @@
+id: on_message
+title: Extensions Passthrough Probe
+description: Echoes WASM input to verify channel_data extensions auto-merge into flow input
+type: messaging
+start: com_example_extensions-probe
+parameters: {}
+tags: []
+schema_version: 2
+entrypoints: {}
+nodes:
+  com_example_extensions-probe:
+    routing: out
+    probe:
+      message: '{{in.input.text}}'

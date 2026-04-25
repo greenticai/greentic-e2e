@@ -1,0 +1,18 @@
+id: main
+title: Builtin-only regression flow
+description: |
+  Single emit.response builtin node. Used by the regression test to assert
+  that greentic-pack build no longer requires resolve.json / resolve.summary.json
+  entries for builtin nodes (fix/builtin-node-resolve-skip in greentic-pack).
+type: messaging
+start: emit_response_only
+parameters: {}
+tags: []
+schema_version: 2
+entrypoints: {}
+nodes:
+  emit_response_only:
+    routing: out
+    emit.response:
+      messages:
+        - text: "ok"
