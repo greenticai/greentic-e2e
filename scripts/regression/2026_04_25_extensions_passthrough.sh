@@ -5,7 +5,9 @@
 #
 # Pins: a synthesised DirectLine activity carrying `channelData.r1_principals`
 # must reach the WASM input verbatim at the canonical JSON Pointer
-# `/input/extensions/channel_data/r1_principals`.
+# `/extensions/channel_data/r1_principals` (top-level on the merged node
+# payload — that's where greentic-runner's
+# `merge_state_extensions_into_node_input` plumbs envelope extensions).
 #
 # Why: a regression at this boundary silently dropped channel-specific
 # passthrough payloads (the R1 demo's `r1_principals` came through as null on
@@ -52,8 +54,10 @@ What this test pins:
 
 Canonical assertion:
   WASM input contains
-    /input/extensions/channel_data/r1_principals
-  with the original payload preserved (snake_case key names).
+    /extensions/channel_data/r1_principals
+  with the original payload preserved (snake_case key names). This is the
+  top-level `extensions` field that the runner merges onto every node WASM
+  input via `merge_state_extensions_into_node_input`.
 
 To run end-to-end:
   RUN_E2E=1 PORT=8080 ./scripts/regression/2026_04_25_extensions_passthrough.sh
@@ -228,7 +232,9 @@ except Exception as exc:
     print(f'BAD_TEXT|reply text not JSON: {exc}; text={text!r}')
     sys.exit(0)
 
-# Canonical assertion: snake_case keys at /input/extensions/channel_data/r1_principals
+# Canonical assertion: snake_case keys at /extensions/channel_data/r1_principals
+# (top-level on the merged node WASM input — see runner
+# `merge_state_extensions_into_node_input`).
 def at(d, path):
     cur = d
     for p in path:
@@ -237,10 +243,10 @@ def at(d, path):
         cur = cur[p]
     return cur
 
-r1 = at(received, ['input', 'extensions', 'channel_data', 'r1_principals'])
+r1 = at(received, ['extensions', 'channel_data', 'r1_principals'])
 problems = []
 if r1 is None:
-    problems.append('missing /input/extensions/channel_data/r1_principals (regression in runner or greentic-start)')
+    problems.append('missing /extensions/channel_data/r1_principals (regression in runner or greentic-start)')
 else:
     if r1.get('country') != 'US':
         problems.append(f'r1_principals.country mutated: {r1.get("country")!r}')
@@ -248,10 +254,10 @@ else:
         problems.append(f'r1_principals.industry mutated: {r1.get("industry")!r}')
 
 # camelCase forms must NOT appear
-if at(received, ['input', 'extensions', 'channelData']) is not None:
+if at(received, ['extensions', 'channelData']) is not None:
     problems.append('extensions.channelData (camelCase) leaked — must be channel_data')
-if at(received, ['input', 'channelData']) is not None:
-    problems.append('input.channelData appeared at wrong nesting (must be inside extensions.)')
+if at(received, ['channelData']) is not None:
+    problems.append('channelData appeared at wrong nesting (must be inside extensions.)')
 
 if problems:
     print('FAIL|' + '; '.join(problems))
