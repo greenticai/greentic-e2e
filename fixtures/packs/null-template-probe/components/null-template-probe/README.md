@@ -1,6 +1,6 @@
 # null-template-probe
 
-Minimal Greentic `component@0.6.0` for the `2026_04_25_null_template_handling`
+Minimal Greentic `component@0.6.0` for the `null_template_handling`
 regression script.
 
 When invoked it echoes its received input back as a JSON string in the

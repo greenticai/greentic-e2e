@@ -1,6 +1,6 @@
 # null-template-probe
 
-Probe pack used by `scripts/regression/2026_04_25_null_template_handling.sh`.
+Probe pack used by `scripts/regression/null_template_handling.sh`.
 
 ## Layout
 

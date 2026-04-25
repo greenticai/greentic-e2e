@@ -10,18 +10,18 @@ Branch: `test/regression-2026-04-25` (forked from `main`). Not pushed.
 All three live under `scripts/regression/` and follow the existing shell
 convention (`run_provider_e2e.sh`, `run_webchat_passthrough_e2e.sh`).
 
-- **`2026_04_25_extensions_passthrough.sh`** — pins `greentic-runner`
+- **`extensions_passthrough.sh`** — pins `greentic-runner`
   `fix/ingress-extensions-and-template-null` (commit `a47fae2`) and
   `greentic-start` `fix/preserve-envelope-extensions-in-flow-input`
   (commit `8b0a020`). Asserts the canonical JSON Pointer
   `/input/extensions/channel_data/r1_principals` is preserved end-to-end
   with snake_case keys. **Skip-by-default**, gated behind `RUN_E2E=1`.
-- **`2026_04_25_emit_response_build.sh`** — pins `greentic-pack`
+- **`emit_response_build.sh`** — pins `greentic-pack`
   `fix/builtin-node-resolve-skip` (commit `5fe4715`, `0.5.3`+). Positive
   fixture: flow with only `emit.response` builds exit 0, no
   `missing resolve summary entries`. Negative fixture: real component
   without resolve entry STILL errors with that string. **Runs by default.**
-- **`2026_04_25_null_template_handling.sh`** — pins `greentic-runner`
+- **`null_template_handling.sh`** — pins `greentic-runner`
   `fix/ingress-extensions-and-template-null` (commit `22d633b`). Empty
   DirectLine payload must not produce `invalid type: null, expected a string`,
   and rendered `content` must be `""` (not JSON null). **Skip-by-default**,
@@ -30,10 +30,10 @@ convention (`run_provider_e2e.sh`, `run_webchat_passthrough_e2e.sh`).
 ## How to run
 
 ```bash
-./scripts/regression/2026_04_25_emit_response_build.sh
+./scripts/regression/emit_response_build.sh
 
-RUN_E2E=1 ./scripts/regression/2026_04_25_extensions_passthrough.sh
-RUN_E2E=1 ./scripts/regression/2026_04_25_null_template_handling.sh
+RUN_E2E=1 ./scripts/regression/extensions_passthrough.sh
+RUN_E2E=1 ./scripts/regression/null_template_handling.sh
 ```
 
 ## Skip rationale

@@ -12,7 +12,7 @@
 # entry must still error with "missing resolve summary entries".
 #
 # Usage:
-#   ./scripts/regression/2026_04_25_emit_response_build.sh
+#   ./scripts/regression/emit_response_build.sh
 #
 # Environment:
 #   GREENTIC_PACK_BIN  Path to the greentic-pack binary to test.

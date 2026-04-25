@@ -1,6 +1,6 @@
 # extensions-passthrough-probe
 
-Probe pack used by `scripts/regression/2026_04_25_extensions_passthrough.sh`.
+Probe pack used by `scripts/regression/extensions_passthrough.sh`.
 
 ## Layout
 

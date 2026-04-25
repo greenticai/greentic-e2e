@@ -27,11 +27,11 @@ Regression scripts (pin specific historical fixes; see
 `scripts/regression/` and `updates/<date>/greentic-e2e.md` for context):
 ```bash
 # Always-on (builds two minimal fixture packs)
-./scripts/regression/2026_04_25_emit_response_build.sh
+./scripts/regression/emit_response_build.sh
 
 # Full e2e regressions (skip-by-default, gated behind RUN_E2E=1)
-RUN_E2E=1 ./scripts/regression/2026_04_25_extensions_passthrough.sh
-RUN_E2E=1 ./scripts/regression/2026_04_25_null_template_handling.sh
+RUN_E2E=1 ./scripts/regression/extensions_passthrough.sh
+RUN_E2E=1 ./scripts/regression/null_template_handling.sh
 ```
 
 AWS cloud demo lifecycle:

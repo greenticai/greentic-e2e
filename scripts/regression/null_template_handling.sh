@@ -1,70 +1,68 @@
 #!/usr/bin/env bash
 # Regression test for greentic-runner fix `fix/ingress-extensions-and-template-null`
-# (commit a47fae2) AND greentic-start `fix/preserve-envelope-extensions-in-flow-input`
-# (commit 8b0a020).
+# (commit 22d633b — the second commit on that branch).
 #
-# Pins: a synthesised DirectLine activity carrying `channelData.r1_principals`
-# must reach the WASM input verbatim at the canonical JSON Pointer
-# `/extensions/channel_data/r1_principals` (top-level on the merged node
-# payload — that's where greentic-runner's
-# `merge_state_extensions_into_node_input` plumbs envelope extensions).
+# Pins: a bare `{{expr}}` template that resolves to a missing key OR explicit
+# JSON null must render as the empty string `""`, not propagate as null /
+# "not found" — matching the 0.5.4 contract that downstream JSON-Schema
+# validators rely on (notably component-llm-openai's `content` field).
 #
-# Why: a regression at this boundary silently dropped channel-specific
-# passthrough payloads (the R1 demo's `r1_principals` came through as null on
-# 2026-04-25 morning until both repos were patched).
+# Architecture decision: shell test (matches existing greentic-e2e
+# convention). The runner already has a unit test for the template renderer
+# itself; this file pins the cross-binary behaviour: a flow whose node input
+# is `'{{in.input.text}}'`, fed an empty payload, must not error.
 #
-# Architecture decision: shell test (matches existing greentic-e2e convention,
-# see run_webchat_passthrough_e2e.sh).
-#
-# Status: SKIP-BY-DEFAULT. Set RUN_E2E=1 to run. The full path requires:
-#   - gtc, greentic-start, greentic-pack, greentic-secrets, jq, curl, python3
-#   - patched greentic-runner (>= 0.5.10) + patched greentic-start (>= 0.5.4)
-#   - probe pack at fixtures/packs/extensions-passthrough-probe (this script
-#     builds it from the on-disk fixture; the WASM probe is the same one used
-#     by run_webchat_passthrough_e2e.sh — bug3-test echoes envelope.extensions
-#     into the bot reply via emit.response handlebars templates)
+# Status: SKIP-BY-DEFAULT. Set RUN_E2E=1 to run end-to-end.
 #
 # Usage:
-#   RUN_E2E=1 ./scripts/regression/2026_04_25_extensions_passthrough.sh
+#   RUN_E2E=1 ./scripts/regression/null_template_handling.sh
 #
 # Environment:
-#   PORT          HTTP port for greentic-start (default 8080)
+#   PORT          HTTP port for greentic-start (default 8082)
 #   KEEP_BUNDLE   if set, don't wipe the generated bundle on exit
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FIXTURES_DIR="${ROOT_DIR}/fixtures"
-PROBE_PACK_SRC="${FIXTURES_DIR}/packs/extensions-passthrough-probe"
-ANSWERS_TEMPLATE="${FIXTURES_DIR}/wizard-answers/extensions-passthrough-bundle.json"
-PORT="${PORT:-8080}"
+PROBE_PACK_SRC="${FIXTURES_DIR}/packs/null-template-probe"
+ANSWERS_TEMPLATE="${FIXTURES_DIR}/wizard-answers/null-template-bundle.json"
+PORT="${PORT:-8082}"
 
 # --- skip gate --------------------------------------------------------------
 if [ -z "${RUN_E2E:-}" ]; then
   cat >&2 <<'EOF'
-[SKIP] 2026_04_25_extensions_passthrough.sh — full e2e test, gated behind RUN_E2E=1.
+[SKIP] null_template_handling.sh — full e2e test, gated behind RUN_E2E=1.
 
 What this test pins:
-  * greentic-runner fix/ingress-extensions-and-template-null (a47fae2):
-    DirectLine `channelData` plumbs through Activity → IngressEnvelope → WASM
-    input.
-  * greentic-start fix/preserve-envelope-extensions-in-flow-input (8b0a020):
-    `ChannelMessageEnvelope.extensions` survives the json!({"input": envelope})
-    shape that run_app_flow builds for the runner.
+  * greentic-runner fix/ingress-extensions-and-template-null (22d633b):
+    bare `{{in.input.text}}` template against a missing or null path renders
+    as `""`, not `null` and not "expression not found".
 
 Canonical assertion:
-  WASM input contains
-    /extensions/channel_data/r1_principals
-  with the original payload preserved (snake_case key names). This is the
-  top-level `extensions` field that the runner merges onto every node WASM
-  input via `merge_state_extensions_into_node_input`.
+  After posting an empty DirectLine activity (no text body), the runtime
+  must:
+    1. NOT log `invalid type: null, expected a string`
+    2. NOT crash the flow
+    3. Produce a bot reply where the rendered content is the empty string
+
+Negative path (regression mode prior to fix):
+  The same payload caused component-llm-openai to refuse the request with a
+  schema error.
 
 To run end-to-end:
-  RUN_E2E=1 PORT=8080 ./scripts/regression/2026_04_25_extensions_passthrough.sh
+  RUN_E2E=1 PORT=8082 ./scripts/regression/null_template_handling.sh
 
 Requires:
   gtc, greentic-start, greentic-pack, greentic-secrets, cargo-component,
-  curl, jq, python3 on PATH; patched greentic-runner + greentic-start binaries.
+  curl, jq, python3 on PATH; patched greentic-runner (>= 0.5.10) binary.
+
+Note:
+  greentic-runner already has a unit test for the template renderer
+  (crates/greentic-runner-host/src/runner/templating.rs ::
+   missing_bare_expression_renders_empty_string,
+   null_bare_expression_renders_empty_string).
+  This script complements it by pinning the cross-binary, full-pack path.
 EOF
   exit 0
 fi
@@ -93,7 +91,7 @@ if lsof -iTCP:"${PORT}" -sTCP:LISTEN >/dev/null 2>&1; then
   exit 1
 fi
 
-WORK_DIR="$(mktemp -d -t greentic-extensions-passthrough-XXXXXX)"
+WORK_DIR="$(mktemp -d -t greentic-null-template-XXXXXX)"
 BUNDLE_DIR="${WORK_DIR}/bundle"
 ANSWERS_FILE="${WORK_DIR}/answers.json"
 RUNTIME_LOG="${WORK_DIR}/runtime.log"
@@ -114,8 +112,8 @@ cleanup() {
 trap cleanup EXIT
 
 # --- build probe pack -------------------------------------------------------
-echo "[build] probe WASM + pack"
-(cd "${PROBE_PACK_SRC}/components/extensions-probe" \
+echo "[build] null-template probe WASM + pack"
+(cd "${PROBE_PACK_SRC}/components/null-template-probe" \
   && cargo component build --release --target wasm32-wasip2 --quiet)
 (cd "${PROBE_PACK_SRC}" && rm -f pack.lock.cbor && greentic-pack build --in . --no-update >/dev/null)
 
@@ -126,7 +124,7 @@ if [ -z "${PROBE_PACK}" ] || [ ! -f "${PROBE_PACK}" ]; then
 fi
 
 # --- render answers + generate bundle ---------------------------------------
-echo "[bundle] generating bundle from wizard answers"
+echo "[bundle] generating bundle"
 python3 - <<PY
 import pathlib
 tpl = pathlib.Path("${ANSWERS_TEMPLATE}").read_text()
@@ -180,7 +178,6 @@ fi
 
 # --- probe -------------------------------------------------------------------
 BASE="http://127.0.0.1:${PORT}/v1/messaging/webchat/default/v3/directline"
-echo "[probe] minting DirectLine token"
 TOKEN=$(curl -sf -X POST "${BASE}/tokens/generate" \
   -H 'Content-Type: application/json' -d '{}' | jq -r '.token')
 CONV_RESP=$(curl -sf -X POST "${BASE}/conversations" \
@@ -191,17 +188,11 @@ sleep 1
 WM=$(curl -sf "${BASE}/conversations/${CID}/activities" \
   -H "Authorization: Bearer ${CT}" | jq -r '.watermark // "0"')
 
-echo "[probe] posting message with channelData.r1_principals"
+# Send a payload with NO `text` field — this is the regression payload.
+echo "[probe] posting empty message (no text field)"
 curl -sf -X POST "${BASE}/conversations/${CID}/activities" \
   -H "Authorization: Bearer ${CT}" -H 'Content-Type: application/json' \
-  -d '{
-    "type":"message",
-    "from":{"id":"e2e-reviewer"},
-    "text":"probe-extensions",
-    "channelData":{
-      "r1_principals":{"country":"US","industry":"telecom"}
-    }
-  }' >/dev/null
+  -d '{"type":"message","from":{"id":"e2e-reviewer"}}' >/dev/null
 
 for _ in $(seq 1 25); do
   sleep 1
@@ -214,55 +205,39 @@ done
 echo "${ACTS}" > "${RESPONSE_FILE}"
 
 # --- assertions --------------------------------------------------------------
-# The probe component echoes WASM input back into the bot reply text as JSON.
-# We assert the canonical JSON Pointer is preserved AND camelCase is absent.
+# 1. Runtime log MUST NOT contain `invalid type: null, expected a string`.
+# 2. Bot reply MUST exist (probe forwards a deterministic reply with the
+#    rendered content; rendered content must be the empty string).
+if grep -q 'invalid type: null, expected a string' "${RUNTIME_LOG}"; then
+  echo "FAIL: runtime logged 'invalid type: null, expected a string' — null-template fix regressed" >&2
+  grep -n 'invalid type: null' "${RUNTIME_LOG}" >&2
+  exit 1
+fi
+
 verdict=$(RESPONSE_FILE="${RESPONSE_FILE}" python3 - <<'PY'
 import json, os, sys
 resp = json.load(open(os.environ['RESPONSE_FILE']))
 bot = [a for a in resp.get('activities', []) if a.get('from', {}).get('id') == 'bot']
 if not bot:
-    print('NO_BOT_REPLY|')
+    print('NO_BOT_REPLY|flow likely errored on null-template render')
     sys.exit(0)
-# The probe encodes the received WASM input JSON in `text`.
 target = bot[-1]
 text = target.get('text') or ''
+# The probe encodes its observed `content` field as JSON in the reply text.
 try:
     received = json.loads(text)
 except Exception as exc:
     print(f'BAD_TEXT|reply text not JSON: {exc}; text={text!r}')
     sys.exit(0)
 
-# Canonical assertion: snake_case keys at /extensions/channel_data/r1_principals
-# (top-level on the merged node WASM input — see runner
-# `merge_state_extensions_into_node_input`).
-def at(d, path):
-    cur = d
-    for p in path:
-        if not isinstance(cur, dict) or p not in cur:
-            return None
-        cur = cur[p]
-    return cur
-
-r1 = at(received, ['extensions', 'channel_data', 'r1_principals'])
-problems = []
-if r1 is None:
-    problems.append('missing /extensions/channel_data/r1_principals (regression in runner or greentic-start)')
+content = received.get('content', '<missing>')
+# Canonical contract: missing/null path renders as ""
+if content == '':
+    print('PASS|content rendered as empty string')
+elif content is None:
+    print('FAIL|content rendered as JSON null (regression: should be "")')
 else:
-    if r1.get('country') != 'US':
-        problems.append(f'r1_principals.country mutated: {r1.get("country")!r}')
-    if r1.get('industry') != 'telecom':
-        problems.append(f'r1_principals.industry mutated: {r1.get("industry")!r}')
-
-# camelCase forms must NOT appear
-if at(received, ['extensions', 'channelData']) is not None:
-    problems.append('extensions.channelData (camelCase) leaked — must be channel_data')
-if at(received, ['channelData']) is not None:
-    problems.append('channelData appeared at wrong nesting (must be inside extensions.)')
-
-if problems:
-    print('FAIL|' + '; '.join(problems))
-else:
-    print('PASS|extensions.channel_data.r1_principals reached WASM input')
+    print(f'FAIL|content rendered as {content!r} (expected "")')
 PY
 )
 
@@ -271,17 +246,17 @@ detail="${verdict#*|}"
 
 case "${status}" in
   PASS)
-    echo "PASS: extensions passthrough — ${detail}"
+    echo "PASS: null-template handling — ${detail}"
     exit 0
     ;;
   NO_BOT_REPLY)
-    echo "FAIL: no bot reply received within 25s" >&2
+    echo "FAIL: ${detail}" >&2
+    echo "---runtime log tail---" >&2
     tail -40 "${RUNTIME_LOG}" >&2
-    cat "${RESPONSE_FILE}" >&2 || true
     exit 1
     ;;
   *)
-    echo "FAIL: extensions passthrough — ${detail}" >&2
+    echo "FAIL: null-template handling — ${detail}" >&2
     cat "${RESPONSE_FILE}" >&2
     exit 1
     ;;

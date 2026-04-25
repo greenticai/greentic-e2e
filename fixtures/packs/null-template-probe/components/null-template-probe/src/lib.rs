@@ -1,7 +1,7 @@
 // null-template-probe — minimal Greentic component@0.6.0 that echoes its
 // received input back as a JSON string in the `text` field of the bot reply.
 //
-// Used by `scripts/regression/2026_04_25_null_template_handling.sh` to verify
+// Used by `scripts/regression/null_template_handling.sh` to verify
 // that `{{in.input.text}}` against a missing/null path renders as the empty
 // string `""`, not `null` and not the string "expression not found". The flow
 // passes `content: '{{in.input.text}}'` and the script asserts the echoed
