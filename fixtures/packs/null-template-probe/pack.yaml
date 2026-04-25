@@ -1,0 +1,29 @@
+pack_id: ai.greentic.null_template.test
+version: 0.1.0
+kind: application
+publisher: Greentic
+components:
+- id: com.example.null-template-probe
+  version: 0.1.0
+  world: root:component/root
+  supports:
+  - messaging
+  profiles:
+    default: default
+    supported:
+    - default
+  capabilities:
+    wasi:
+      random: false
+      clocks: false
+    host: {}
+  wasm: components/null-template-probe/target/wasm32-wasip1/release/null_template_probe.wasm
+dependencies: []
+flows:
+- id: on_message
+  file: flows/on_message.ygtc
+  tags:
+  - default
+  entrypoints:
+  - default
+assets: []

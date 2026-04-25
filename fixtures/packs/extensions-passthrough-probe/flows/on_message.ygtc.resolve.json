@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "flow": "on_message.ygtc",
+  "nodes": {
+    "com_example_extensions-probe": {
+      "source": {
+        "kind": "local",
+        "path": "file://../components/extensions-probe/target/wasm32-wasip2/release/extensions_probe.wasm"
+      }
+    }
+  }
+}

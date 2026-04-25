@@ -1,0 +1,14 @@
+id: on_message
+title: Null Template Probe
+description: Bare expression against an unconditionally missing path renders to "" not null/error
+type: messaging
+start: com_example_null-template-probe
+parameters: {}
+tags: []
+schema_version: 2
+entrypoints: {}
+nodes:
+  com_example_null-template-probe:
+    routing: out
+    probe:
+      content: '{{in.input.deliberately_missing_field}}'

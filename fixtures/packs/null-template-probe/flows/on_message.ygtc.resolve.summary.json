@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "flow": "on_message.ygtc",
+  "nodes": {
+    "com_example_null-template-probe": {
+      "component_id": "com.example.null-template-probe",
+      "source": {
+        "kind": "local",
+        "path": "../components/null-template-probe/target/wasm32-wasip2/release/null_template_probe.wasm"
+      },
+      "digest": "sha256:64445c1777653cf17a452bf558ba956540c4503e31366224973ac0dda6c1e0a0",
+      "manifest": {
+        "world": "greentic:component/component@0.6.0",
+        "version": "0.1.0"
+      }
+    }
+  }
+}

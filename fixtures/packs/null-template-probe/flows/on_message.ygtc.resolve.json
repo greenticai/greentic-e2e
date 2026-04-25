@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "flow": "on_message.ygtc",
+  "nodes": {
+    "com_example_null-template-probe": {
+      "source": {
+        "kind": "local",
+        "path": "file://../components/null-template-probe/target/wasm32-wasip2/release/null_template_probe.wasm"
+      }
+    }
+  }
+}

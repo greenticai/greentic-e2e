@@ -1,0 +1,77 @@
+{
+  "wizard_id": "greentic-dev.wizard.launcher.main",
+  "schema_id": "greentic-dev.launcher.main",
+  "schema_version": "1.0.0",
+  "locale": "en-GB",
+  "answers": {
+    "selected_action": "bundle",
+    "delegate_answer_document": {
+      "wizard_id": "greentic-bundle.wizard.run",
+      "schema_id": "greentic-bundle.wizard.answers",
+      "schema_version": "1.0.0",
+      "locale": "en-GB",
+      "answers": {
+        "access_rules": [
+          {
+            "policy": "public",
+            "rule_path": "ai.greentic.extensions_passthrough.test",
+            "tenant": "default"
+          }
+        ],
+        "advanced_setup": false,
+        "app_pack_entries": [
+          {
+            "detected_kind": "local",
+            "display_name": "Extensions Passthrough Probe Pack",
+            "mapping": {
+              "scope": "global"
+            },
+            "pack_id": "ai.greentic.extensions_passthrough.test",
+            "reference": "file://{{PROBE_PACK_PATH}}"
+          }
+        ],
+        "app_packs": [
+          "file://{{PROBE_PACK_PATH}}"
+        ],
+        "bundle_id": "extensions-passthrough-e2e",
+        "bundle_name": "extensions-passthrough-e2e",
+        "export_intent": false,
+        "extension_provider_entries": [
+          {
+            "detected_kind": "oci",
+            "display_name": "Greentic Messaging Webchat GUI (latest)",
+            "provider_id": "greentic.messaging.webchat-gui.latest",
+            "reference": "oci://ghcr.io/greenticai/packs/messaging/messaging-webchat-gui:latest",
+            "version": "latest"
+          },
+          {
+            "detected_kind": "oci",
+            "display_name": "Greentic State Memory (latest)",
+            "provider_id": "state-memory",
+            "reference": "oci://ghcr.io/greenticai/packs/state/state-memory:latest",
+            "version": "latest"
+          }
+        ],
+        "extension_providers": [
+          "oci://ghcr.io/greenticai/packs/messaging/messaging-webchat-gui:latest",
+          "oci://ghcr.io/greenticai/packs/state/state-memory:latest"
+        ],
+        "mode": "create",
+        "output_dir": "{{BUNDLE_DIR}}",
+        "remote_catalogs": [],
+        "setup_answers": {},
+        "setup_execution_intent": false,
+        "setup_specs": {}
+      },
+      "locks": {
+        "cache_policy": "workspace-local",
+        "catalogs": [],
+        "execution": "execute",
+        "lock_file": "bundle.lock.json",
+        "requested_mode": "create",
+        "setup_state_files": [],
+        "workspace_root": "bundle.yaml"
+      }
+    }
+  }
+}
