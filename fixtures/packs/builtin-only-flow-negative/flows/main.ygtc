@@ -1,0 +1,18 @@
+id: main
+title: Negative test for builtin-node resolve-skip
+description: |
+  This flow contains a real (non-builtin) component id without a matching
+  resolve.json / resolve.summary.json entry. The build MUST fail; this pins
+  that the builtin exemption only applies to runtime builtins, not arbitrary
+  components.
+type: messaging
+start: needs_resolution
+parameters: {}
+tags: []
+schema_version: 2
+entrypoints: {}
+nodes:
+  needs_resolution:
+    component-not-builtin:
+      example: "real component requires resolve.json entry"
+    routing: out
