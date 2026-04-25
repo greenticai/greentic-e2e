@@ -113,7 +113,7 @@ trap cleanup EXIT
 echo "[build] probe WASM + pack"
 (cd "${PROBE_PACK_SRC}/components/extensions-probe" \
   && cargo component build --release --target wasm32-wasip2 --quiet)
-(cd "${PROBE_PACK_SRC}" && greentic-pack build --in . >/dev/null)
+(cd "${PROBE_PACK_SRC}" && rm -f pack.lock.cbor && greentic-pack build --in . --no-update >/dev/null)
 
 PROBE_PACK="$(ls "${PROBE_PACK_SRC}"/dist/*.gtpack 2>/dev/null | head -n1)"
 if [ -z "${PROBE_PACK}" ] || [ ! -f "${PROBE_PACK}" ]; then
@@ -154,7 +154,7 @@ done
 
 # --- start runtime -----------------------------------------------------------
 echo "[runtime] starting on :${PORT}"
-(cd "${BUNDLE_DIR}" && greentic-start --locale en start --bundle . \
+(cd "${BUNDLE_DIR}" && GREENTIC_GATEWAY_PORT="${PORT}" greentic-start --locale en start --bundle . \
     --nats off --cloudflared off --ngrok off \
     > "${RUNTIME_LOG}" 2>&1) &
 RUNTIME_PID=$!
