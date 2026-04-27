@@ -27,7 +27,7 @@
     },
     "messaging-webchat-gui": {
       "base_url": "http://localhost:8080",
-      "jwt_signing_key": "dummy-jwt-signing-key-for-e2e-only-32chars-min-padding",
+      "jwt_signing_key": "596ec03de88199a33a950175b958607846a99f8b75b550f21217f16306fcd3c9",
       "tenant_channel_id": "demo-default"
     },
     "messaging-telegram": {
