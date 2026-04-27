@@ -10,11 +10,15 @@ export class WebChat {
   constructor(page: Page, url: string) {
     this.page = page;
     this.url = url;
-    // TODO(Task 1 Step 3 findings): adjust selectors after real DOM inspection.
+    // Selectors confirmed against the real Greentic-WebChat DOM (run #5
+    // 2026-04-27 page snapshot): BotFramework WebChat embedded in a
+    // Greentic-branded wrapper. User messages are top-level <article>
+    // elements with "You said:" prefix; bot messages live inside
+    // [role="feed"].
     this.input = page.getByRole("textbox", { name: /message|chat|type/i });
     this.sendBtn = page.getByRole("button", { name: /send/i });
     this.typingIndicator = page.locator(
-      '[data-testid="typing-indicator"], .typing-indicator',
+      '[aria-label*="typing" i], [data-testid="typing-indicator"], .typing-indicator',
     );
   }
 
@@ -27,9 +31,13 @@ export class WebChat {
   async send(text: string): Promise<void> {
     await this.input.fill(text);
     await this.sendBtn.click();
-    await expect(this.page.getByText(text, { exact: false })).toBeVisible({
-      timeout: 5_000,
-    });
+    // BotFramework renders the user bubble as <article> containing
+    // "You said:" + the text. Multiple DOM nodes contain the text (live
+    // region label + bubble + aria) so .first() satisfies Playwright
+    // strict mode.
+    await expect(
+      this.page.locator("article").filter({ hasText: text }).first(),
+    ).toBeVisible({ timeout: 5_000 });
   }
 
   async awaitReply(opts: { timeoutMs?: number; minLength?: number } = {}): Promise<string> {
@@ -63,8 +71,10 @@ export class WebChat {
   }
 
   private botMessageSelector(): Locator {
-    // TODO(Task 1 Step 3 findings): adjust to actual DOM.
-    return this.page.locator('[data-from="bot"], .bot-message, .from-bot');
+    // BotFramework WebChat: bot messages live inside the [role="feed"]
+    // transcript region. User messages are top-level <article> siblings
+    // outside the feed. Confirmed via real-DOM inspection (run #5).
+    return this.page.getByRole("feed").locator("article");
   }
 
   private async botMessageCount(): Promise<number> {
