@@ -106,6 +106,48 @@ async function gtcSetup(
   );
 }
 
+/**
+ * gtc setup writes config but does NOT populate the dev-store secrets backend
+ * the runner reads from at startup. The runner reports
+ * `using_env_fallback=false` so env vars are not consulted either. Mirror the
+ * pattern in scripts/run_webchat_passthrough_e2e.sh: seed messaging-webchat-gui
+ * secrets via `greentic-secrets admin set` before starting the runner. Without
+ * this, the WebChat UI gets HTTP 500 on the DirectLine token request.
+ *
+ * Reads the values from the patched setup-answers JSON, so any value override
+ * via DemoOptions.setupAnswers or the demo's patch file is honored.
+ */
+async function seedWebchatSecrets(
+  bundleDir: string,
+  setupAnswersPath: string,
+  team: string,
+): Promise<void> {
+  const answers = JSON.parse(await readFile(setupAnswersPath, "utf8"));
+  const webchat = answers?.setup_answers?.["messaging-webchat-gui"];
+  if (!webchat || typeof webchat !== "object") return;
+
+  const storePath = join(bundleDir, ".greentic", "dev", ".dev.secrets.env");
+  await mkdir(dirname(storePath), { recursive: true });
+
+  for (const [name, value] of Object.entries(webchat)) {
+    if (typeof value !== "string") continue;
+    await runOrThrow(
+      "greentic-secrets",
+      [
+        "admin", "set",
+        "--env", "dev",
+        "--tenant", team,
+        "--store-path", storePath,
+        "--visibility", "team",
+        "--category", "messaging-webchat-gui",
+        "--name", name,
+        "--value", value,
+      ],
+      bundleDir,
+    );
+  }
+}
+
 async function applyAnswersPatch(
   demoName: string,
   workerIndex: number,
@@ -271,6 +313,13 @@ export const test = base.extend<{
 
       await gtcSetup(bundleDir, setupAnswersPath, opts.envOverrides);
 
+      const team = opts.team ?? "default";
+      const tenant = opts.tenant ?? "demo";
+      // Populate dev-store with messaging-webchat-gui secrets so the runner
+      // can issue DirectLine tokens. Without this, WebChat HTML loads but the
+      // token endpoint returns 500.
+      await seedWebchatSecrets(bundleDir, setupAnswersPath, team);
+
       const logFile = join(bundleDir, "..", `gtc-${opts.name}-w${testInfo.workerIndex}.log`);
       const proc = await gtcStart(bundleDir, logFile, opts.envOverrides);
 
@@ -285,8 +334,6 @@ export const test = base.extend<{
         throw e;
       }
 
-      const team = opts.team ?? "default";
-      const tenant = opts.tenant ?? "demo";
       const handle: RunningDemo = {
         name: opts.name,
         team,
