@@ -159,22 +159,28 @@ function deepMerge<T>(base: T, overlay: Partial<T>): T {
 
 async function gtcStart(
   bundleDir: string,
-  port: number,
   logFile: string,
   envOverrides?: Record<string, string>,
 ): Promise<ChildProcess> {
-  // Per spec §13.5 / preflight finding: gtc start does NOT expose --port. We
-  // call greentic-runner directly with --port and the bundle's resolved
-  // bindings path. greentic-runner is installed alongside gtc by `gtc install`.
+  // greentic-runner --bindings expects extracted .gtbind files which only exist
+  // after greentic-start mounts the bundle's squashfs. Calling runner directly
+  // errors with "at least one gtbind file is required". Use greentic-start
+  // start --config bundle.yaml — it handles the squashfs mount + spawns the
+  // runner with correct bindings. Trade-off: greentic-start does not expose a
+  // --port flag (only --admin-port), so the runner binds to its default 8080.
+  // Tests run with workers: 1 (serialized) to avoid port collision; this is
+  // acceptable for the PR-1 walking skeleton (one demo) and for PR-2 (~12
+  // demos × ~1min ≈ 12 min wall clock per matrix cell).
   await mkdir(join(bundleDir, "..", "logs"), { recursive: true }).catch(() => {});
   const logStream = createWriteStream(logFile, { flags: "w" });
-  const bindingsPath = join(bundleDir, "resolved");
   const proc = spawn(
-    "greentic-runner",
+    "greentic-start",
     [
-      "--port", String(port),
-      "--bindings", bindingsPath,
-      "--no-cache",
+      "start",
+      "--config", join(bundleDir, "bundle.yaml"),
+      "--cloudflared", "off",
+      "--ngrok", "off",
+      "--quiet",
     ],
     {
       cwd: bundleDir,
@@ -184,9 +190,6 @@ async function gtcStart(
   );
   proc.stdout?.pipe(logStream);
   proc.stderr?.pipe(logStream);
-  // ENOENT (missing binary) and other spawn errors land here; without this
-  // handler Node would emit an unhandled error and the test would fail with a
-  // confusing /readyz timeout instead of the real cause.
   proc.on("error", (err) => {
     logStream.write(`spawn error: ${err.stack ?? err.message}\n`);
   });
@@ -244,10 +247,11 @@ export const test = base.extend<{
         }
       }
 
-      const port = allocatePort({
-        workerIndex: testInfo.workerIndex,
-        fixtureIndex: created.length,
-      });
+      // greentic-start does not expose --port; runner uses default 8080.
+      // Tests must run with workers: 1 (set in playwright.config.ts) to avoid
+      // collision. The allocatePort helper is kept for future when an upstream
+      // port flag lands.
+      const port = 8080;
       const releaseTag = opts.releaseTag ?? "latest";
 
       const bundleDir = await ensureBundleExtracted(opts.name, testInfo.workerIndex, releaseTag);
@@ -268,7 +272,7 @@ export const test = base.extend<{
       await gtcSetup(bundleDir, setupAnswersPath, opts.envOverrides);
 
       const logFile = join(bundleDir, "..", `gtc-${opts.name}-w${testInfo.workerIndex}.log`);
-      const proc = await gtcStart(bundleDir, port, logFile, opts.envOverrides);
+      const proc = await gtcStart(bundleDir, logFile, opts.envOverrides);
 
       try {
         await waitForReady(port, proc);
