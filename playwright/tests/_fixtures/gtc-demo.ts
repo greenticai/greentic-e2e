@@ -177,13 +177,28 @@ async function gtcStart(
   );
   proc.stdout?.pipe(logStream);
   proc.stderr?.pipe(logStream);
+  // ENOENT (missing binary) and other spawn errors land here; without this
+  // handler Node would emit an unhandled error and the test would fail with a
+  // confusing /readyz timeout instead of the real cause.
+  proc.on("error", (err) => {
+    logStream.write(`spawn error: ${err.stack ?? err.message}\n`);
+  });
   return proc;
 }
 
-async function waitForReady(port: number, timeoutMs = 60_000): Promise<void> {
+async function waitForReady(
+  port: number,
+  proc: ChildProcess,
+  timeoutMs = 60_000,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   let lastErr: unknown;
   while (Date.now() < deadline) {
+    if (proc.exitCode !== null) {
+      throw new Error(
+        `greentic-runner exited ${proc.exitCode} before /readyz; check attached log`,
+      );
+    }
     try {
       const res = await fetch(`http://127.0.0.1:${port}/readyz`);
       if (res.ok) return;
@@ -245,7 +260,7 @@ export const test = base.extend<{
       const proc = await gtcStart(bundleDir, port, logFile, opts.envOverrides);
 
       try {
-        await waitForReady(port);
+        await waitForReady(port, proc);
       } catch (e) {
         await stopGtc(proc);
         await testInfo.attach(`gtc-log-${opts.name}-startup-fail`, {
