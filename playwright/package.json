@@ -1,0 +1,22 @@
+{
+  "name": "@greentic/demo-e2e-playwright",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Browser-driven e2e for greentic-demo bundles",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "playwright test",
+    "test:stable": "GTC_BIN=gtc-stable playwright test --project=stable",
+    "test:dev": "GTC_BIN=gtc-dev playwright test --project=dev",
+    "test:debug": "GTC_BIN=gtc-stable playwright test --project=stable --headed --debug",
+    "show-report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0"
+  }
+}
