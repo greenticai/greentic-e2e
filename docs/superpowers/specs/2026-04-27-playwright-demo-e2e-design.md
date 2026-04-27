@@ -142,16 +142,20 @@ If Maarten's intent turns out to be different (for example tenant-name `dev` vs 
     └─ per spec file, parallelized across workers:
          fixture gtcDemo({ name }) =>
            - resolve worker-isolated port
-           - download bundle from greentic-demo release (cached per worker)
-           - gtc setup --no-ui <bundle> --answers <setup.json>
-           - gtc start <bundle> --port ${port}            (background)
+           - download create-answers + setup-answers from greentic-demo release (cached per worker)
+           - gtc wizard --answers <create-answers.json>             (materializes bundle dir)
+           - load + overlay tests/_fixtures/demo-patches/<demo>.json on setup-answers
+           - gtc setup --non-interactive <bundle> --answers <patched-setup.json>
+           - greentic-runner --port ${port} --bindings <bundle>/resolved   (background)
            - poll /readyz until 200 or timeout (60s)
-           - yield { demoUrl, gtcLogs } to test
+           - yield { demoUrl, gtcLogs, team } to test
          ... browser-driven assertions ...
          fixture teardown:
-           - SIGTERM gtc, 5s grace, SIGKILL
-           - on test failure: attach gtc log, screenshot, trace, video
+           - SIGTERM runner, 5s grace, SIGKILL
+           - on test failure: attach runner log, screenshot, trace, video
 ```
+
+The fixture intentionally bypasses `gtc start`/`greentic-start start` and calls `greentic-runner` directly because `gtc start` does not expose a `--port` flag (see §13.5). `greentic-runner --port <N>` is the canonical port mechanism. We lose the cloudflared/ngrok wiring that `greentic-start` does, which is fine for nightly e2e (those are off by design).
 
 ## 5. `gtcDemo` fixture
 
@@ -159,22 +163,28 @@ If Maarten's intent turns out to be different (for example tenant-name `dev` vs 
 
 ```ts
 type GtcDemo = {
-  name: string;
+  name: string;       // demo key, e.g. "helpdesk-itsm"
+  team: string;       // setup tenant team, default "default"
+  tenant: string;     // setup tenant, default "demo"
   port: number;
-  demoUrl: string;
+  demoUrl: string;    // http://127.0.0.1:<port>/v1/web/webchat/<team>/
   bundleDir: string;
   logFile: string;
 };
 
 type DemoOptions = {
   name: string;
-  setupAnswers?: Record<string, unknown>;
+  team?: string;                          // default "default" — matches greentic-runner output
+  tenant?: string;                        // default "demo"
+  setupAnswers?: Record<string, unknown>; // override the patched release answers
   envOverrides?: Record<string, string>;
   skipIfMissingSecrets?: string[];
 };
 
 export const test = base.extend<{ gtcDemo: (opts: DemoOptions) => Promise<GtcDemo> }>({ /* … */ });
 ```
+
+**`demoUrl` formula.** The runner exposes WebChat at `/v1/web/webchat/<team>/`, where `<team>` is the team configured during setup (default `default`). Confirmed empirically against `helpdesk-itsm` on 2026-04-27 — runner output: `Routes: .../v1/web/webchat/default/`. The URL is **per-team**, not per-demo, because multiple demos served from one runner share the same WebChat route.
 
 ### 5.2 Implementation notes
 
@@ -190,7 +200,7 @@ export const test = base.extend<{ gtcDemo: (opts: DemoOptions) => Promise<GtcDem
 
 | Failure | Fixture behavior |
 |---------|------------------|
-| `gtc start` crashes during startup | `waitForReady` timeout fires; fixture throws; test marked failed; gtc log attached. |
+| `greentic-runner` crashes during startup | `waitForReady` timeout fires; fixture throws; test marked failed; runner log attached. |
 | Port already in use | Bootstrap precheck via `lsof`; deterministic port range avoids collision under normal CI conditions. |
 | Bundle download 404 (missing release asset) | `ensureBundleCached` fails fast with the exact asset URL — diagnoses regressions like Maarten's "all gtpacks were uploaded to release" issue. |
 | Hung gtc process from prior test | Teardown SIGKILL after 5s grace; bootstrap also kills any lingering `greentic-runner`. |
@@ -413,14 +423,18 @@ npx playwright show-report
 | gtc-side fixes (Fix 1-5) | Owner repos: `greentic`, `greentic-setup`, `greentic-pack`, `greentic-demo` — not Bima |
 | `notify-scheduled-failures.yml` | Existing owner — not touched by this work |
 
-## 13. Open questions and assumptions to confirm during PR-1
+## 13. Open questions and assumptions
 
-1. **WebChat HTML structure.** POM selectors in §6.1 are tentative. The first PR-1 task is to inspect `/v1/web/webchat/helpdesk-itsm/` in a real browser and confirm `getByRole`, `data-testid`, `.ac-textBlock`, typing-indicator, and bot-message selectors. Adjust the POM before locking.
-2. **Channel interpretation.** This design assumes `-dev` = `cargo install --git main` and `main` (in Maarten's wording) = `cargo binstall gtc` published stable. If that interpretation is wrong, only the matrix in §4.3 and `bootstrap-gtc.sh` change.
+Updated 2026-04-27 with PR-1 preflight findings.
+
+1. **WebChat HTML structure.** POM selectors in §6.1 are tentative. PR-1 first task is to inspect `/v1/web/webchat/default/` in a real browser and confirm `getByRole`, `data-testid`, `.ac-textBlock`, typing-indicator, and bot-message selectors. Adjust the POM before locking.
+2. **Channel interpretation.** This design assumes `-dev` = `cargo install --git main` and `main` (in Maarten's wording) = `cargo binstall gtc` published stable. Awaiting Slack confirmation from Maarten; if wrong, only the matrix in §4.3 and `bootstrap-gtc.sh` change.
 3. **`weather-mcp-demo` secret name.** TBD during PR-2c — confirm against the demo's bundle answers file.
 4. **`cards-demo` testability.** The release v0.1.61 includes only `cards-demo.gtpack` (no answers files). Confirm during PR-2b whether this is a runnable demo or a packaging artifact only; if the latter, drop it from the catalog.
-5. **`gtc start --port` flag.** This design assumes the flag exists; confirm against `gtc start --help` during PR-1 implementation. If it does not, the fixture falls back to `GREENTIC_PORT` env var or sequential single-port execution.
-6. **Bundle directory layout from `download-demo-assets.ts`.** Some demos in v0.1.61 have a `.gtpack` and a `.gtbundle`; the fixture needs to choose the right artifact for `gtc setup`. Confirm with `gtc setup --help` and the existing `cloud-demo-e2e.yml` patterns during PR-1.
+5. **~~`gtc start --port` flag.~~ RESOLVED 2026-04-27.** `gtc start` does NOT expose a `--port` flag (delegates to `greentic-start start` which only has `--admin-port`). The fixture must call `greentic-runner --port <N> --bindings <bundleDir>/resolved` directly to enable parallel Playwright workers on isolated ports. `greentic-runner --port` is documented and stable. Trade-off accepted: skipping `greentic-start` means we don't exercise its cloudflared/ngrok/secrets init for nightly tests, which is acceptable since nightly already uses `--cloudflared off --ngrok off`.
+6. **Bundle directory layout.** The fixture uses `gtc wizard --answers <create.json>` to materialize the bundle directory (confirmed working with remote URLs against Maarten's Fix 5), then `gtc setup --non-interactive <bundle> --answers <patched-setup.json>` for setup, then `greentic-runner --port <N> --bindings <bundle>/resolved` for start.
+7. **Upstream answers JSON incomplete (NEW finding 2026-04-27).** `helpdesk-itsm-setup-answers.json` from `greentic-demo` v0.1.61 has empty strings and missing keys for required fields like `messaging-slack.public_base_url`, `messaging-slack.slack_signing_secret`, etc. Maarten's Fix 2 (`greentic-setup --non-interactive`) correctly fails on these — the actual root cause Paul could not run the demo is upstream answers JSON, not just the remote-invocation regression Maarten fixed. Fixture mitigation: per-demo overlay patches in `tests/_fixtures/demo-patches/<demo>.json` augment the upstream JSON with safe placeholder values for fields that are not security-sensitive (URLs, IDs) and use real env-var-backed values for genuine secrets. Upstream tracking: greentic-demo issue to be filed for proper fix (sanitize the answers JSON or drop slack/teams/webex from helpdesk-itsm bundle composition).
+8. **`gtc setup --no-ui` vs `--non-interactive` (NEW 2026-04-27).** The existing `--no-ui` flag still requires a TTY for stdin prompts (per `greentic-setup --help`: "stdin prompts may still be used"). The proper non-interactive flag is `--non-interactive` ("Strict non-interactive mode: no prompts, fail if answers incomplete") introduced by Maarten's Fix 2 in `greentic-setup 0.5.2`. **The fixture and CI workflow must use `--non-interactive`, not `--no-ui`.**
 
 ## 14. References
 

@@ -66,89 +66,81 @@ git checkout -b feat/playwright-demo-e2e-pr1
 
 ---
 
-## Task 1: Resolve preflight unknowns (no code)
+## Task 1: Resolve preflight unknowns
 
-**Files:** none (notes captured in PR description and any spec deltas)
+**Status:** Steps 1, 2, 5 RESOLVED 2026-04-27. Steps 3, 4 still require Bima.
 
-**Why this is Task 1:** The spec §13 lists six open questions that affect concrete implementation choices in later tasks. Resolving them upfront prevents rework. None of these require write access — all are local inspection or Slack confirmation.
+**Files:** none (notes captured below and in PR description).
 
-- [ ] **Step 1: Confirm `gtc start --port` flag exists**
+**Why this is Task 1:** The spec §13 lists open questions that affect concrete implementation choices in later tasks. Resolving them upfront prevents rework.
 
-```bash
-which gtc || cargo binstall -y gtc
-gtc start --help 2>&1 | grep -E '\-\-port|GREENTIC_PORT'
-```
+### Resolved findings (2026-04-27)
 
-Expected: a flag matching `--port <PORT>` or an env var `GREENTIC_PORT`. Note which one. The fixture in Task 6 uses whichever exists.
+- [x] **Step 1: `gtc start --port` flag — RESOLVED. Flag does NOT exist.**
 
-- [ ] **Step 2: Confirm bundle artifact selection (gtbundle vs gtpack) for `gtc setup`**
+  - `gtc start` delegates to `greentic-start start`, which exposes only `--admin-port` (admin API), not the main runner port.
+  - Underlying `greentic-runner` HAS a documented `--port <PORT>` flag (default 8080).
+  - **Decision:** fixture calls `greentic-runner --port <N> --bindings <bundleDir>/resolved` directly. See spec §13.5.
+  - Implication for Task 6: rewrite `gtcStart()` to spawn `greentic-runner` instead of `gtc start`. Already reflected in this plan.
 
-```bash
-gtc setup --help 2>&1 | grep -A2 -E 'bundle|pack'
-gtc wizard --help 2>&1 | head -30
-```
+- [x] **Step 2: Bundle artifact selection — RESOLVED.**
 
-Expected: clarity on which file `gtc setup` consumes. Cross-check `cloud-demo-e2e.yml` and `provider-e2e.yml` patterns in this repo to see which artifact they pass.
+  - `gtc wizard --answers <create-answers.json>` materializes `<demo>-demo-bundle/` containing `bundle.yaml`, `bundle.lock.json`, `dist/`, `packs/`, `providers/`, `resolved/`, `state/`, `tenants/`.
+  - `gtc setup --non-interactive <bundleDir> --answers <setup-answers.json>` operates on that directory.
+  - `greentic-runner --bindings <bundleDir>/resolved` reads bindings from the resolved subtree.
+  - The `.gtbundle` and `.gtpack` archive files in the release are NOT consumed by this flow; only the answers JSONs and the materialized bundle dir are.
 
-- [ ] **Step 3: Inspect WebChat DOM for `helpdesk-itsm`**
+- [x] **Step 5: greentic-demo remote invocation (Maarten's Fix 5) — RESOLVED PARTIAL.**
 
-```bash
-mkdir -p /tmp/webchat-inspect && cd /tmp/webchat-inspect
-gtc wizard --answers https://github.com/greenticai/greentic-demo/releases/latest/download/helpdesk-itsm-create-answers.json
-gtc setup --no-ui ./helpdesk-itsm-demo-bundle \
-  --answers https://github.com/greenticai/greentic-demo/releases/latest/download/helpdesk-itsm-setup-answers.json
-gtc start ./helpdesk-itsm-demo-bundle &
-GTC_PID=$!
-sleep 10
-curl -s http://127.0.0.1:8080/readyz && echo " OK"
-# Open in browser:
-xdg-open http://127.0.0.1:8080/v1/web/webchat/helpdesk-itsm/ 2>/dev/null \
-  || open http://127.0.0.1:8080/v1/web/webchat/helpdesk-itsm/
-```
+  - `gtc wizard --answers <https-URL>` works ✅ — bundle materializes from remote.
+  - `gtc setup --non-interactive` correctly fails with descriptive error: `"missing required setup answer for messaging-slack.public_base_url"`. This is **Maarten's Fix 2 working as designed.**
+  - **NEW BUG discovered:** the upstream `helpdesk-itsm-setup-answers.json` has empty strings for required fields (`messaging-slack.public_base_url`, `slack_signing_secret`, plus likely more in `messaging-teams`/`messaging-webex`). This is the actual root cause Paul could not run the demo, separate from Maarten's remote-invocation fix.
+  - **Decision:** mitigate via per-demo overlay patches in `tests/_fixtures/demo-patches/<demo>.json`. See spec §13.7.
+  - **Upstream tracking:** Bima to file an issue against `greenticai/greentic-demo` for proper sanitization or composition fix.
 
-In DevTools, capture for the input field, send button, message-list container, bot message wrapper, and typing indicator (if any):
-- accessible role (`getByRole('textbox')` etc.)
-- accessible name
-- `data-testid` attribute (if present)
-- class names (last resort)
+- [x] **Bonus finding: `--no-ui` is insufficient — must use `--non-interactive`.**
 
-Write findings as a comment in the PR description so Task 7's POM uses real selectors. After capture:
+  - `gtc setup --no-ui` errors `IO error: not a terminal` in non-TTY contexts (CI). Per `greentic-setup --help`: `--no-ui` "stdin prompts may still be used".
+  - The proper flag is `--non-interactive` ("Strict non-interactive mode: no prompts, fail if answers incomplete"), introduced by Maarten's Fix 2 in `greentic-setup 0.5.2`.
+  - **All references in this plan and the spec to `--no-ui` for setup have been updated to `--non-interactive`.**
 
-```bash
-kill $GTC_PID 2>/dev/null
-```
+- [x] **Bonus finding: WebChat URL pattern uses `<team>`, not `<demo>`.**
 
-- [ ] **Step 4: Confirm channel interpretation with Maarten**
+  - Real runner output observed: `Routes: .../v1/web/webchat/default/`.
+  - The path component is the team name (default `default`), not the demo name.
+  - **Spec §5.1, §6.1 updated accordingly.** `demoUrl` formula in fixture: `http://127.0.0.1:${port}/v1/web/webchat/${team}/`.
 
-Post in the Slack thread (reply to the original 12:54 AM message):
+### Steps still requiring Bima
 
-> Bima: confirming `-dev` vs `main` interpretation for the Playwright nightly. Plan: `stable` cell = `cargo binstall gtc` (latest published), `dev` cell = `cargo install --git https://github.com/greenticai/greentic --branch main --locked`. Sound right, or did you mean something else (tenant name, branch artifact, gtc dev subcommand)?
+- [ ] **Step 3: Inspect WebChat DOM for `helpdesk-itsm`** (deferred — runs after Task 6 fixture is functional)
 
-Wait for confirmation before Task 10 (workflow). If silence after 12h, proceed with the spec assumption — it's documented and trivial to flip via `playwright.config.ts` projects[] later.
+  Once the fixture in Task 6 is implemented well enough to start a demo on a known port, run a single test in `--headed --debug` mode:
 
-- [ ] **Step 5: Decide on `weather-mcp-demo` and `cards-demo` (out of PR-1 scope, but record findings)**
+  ```bash
+  cd ~/Works/greentic/greentic-e2e/.worktrees/playwright-pr1/playwright
+  GTC_BIN=gtc-stable npx playwright test helpdesk-itsm --project=stable --headed --debug
+  ```
+
+  In the Playwright Inspector, navigate to the WebChat URL (`http://127.0.0.1:<port>/v1/web/webchat/default/`) and capture for input, send button, message-list, bot message wrapper, and typing indicator: accessible role, accessible name, `data-testid` if any, fallback class names. Update `webchat-page.ts` selectors with findings before locking Task 7.
+
+- [ ] **Step 4: Confirm channel interpretation with Maarten via Slack**
+
+  Reply in the original 12:54 AM thread:
+
+  > Bima: confirming `-dev` vs `main` interpretation for the Playwright nightly. Plan: `stable` cell = `cargo binstall gtc` (latest published), `dev` cell = `cargo install --git https://github.com/greenticai/greentic --branch main --locked`. Sound right, or did you mean something else (tenant name, branch artifact, gtc dev subcommand)?
+
+  If Maarten replies differently, only the matrix in `playwright.config.ts` and `bootstrap-gtc.sh` change. Default to spec assumption if no reply within 12 hours.
+
+### Out-of-scope demo notes (informational, not blocking PR-1)
+
+For PR-2c reference: `weather-mcp-demo` and `cards-demo` need separate confirmation. Run during PR-2 prep:
 
 ```bash
 gh release view v0.1.61 --repo greenticai/greentic-demo --json assets \
   | jq '[.assets[].name | select(contains("weather") or contains("cards"))]'
-cat /tmp/webchat-inspect/helpdesk-itsm-demo-bundle/bundle.yaml 2>/dev/null \
-  | grep -E 'secrets|env' | head -20
 ```
 
-Note any secret env-var names exposed by demos for PR-2c reference. Not blocking for PR-1.
-
-- [ ] **Step 6: Commit empty placeholder if anything required spec edits**
-
-If Steps 1–5 surfaced corrections to spec §13 (e.g. flag name turned out to be `--listen-addr` not `--port`), edit the spec on this branch to reflect reality:
-
-```bash
-# Only if spec needs adjustment
-$EDITOR docs/superpowers/specs/2026-04-27-playwright-demo-e2e-design.md
-git add docs/superpowers/specs/2026-04-27-playwright-demo-e2e-design.md
-git commit -m "docs(playwright): correct §13 preflight findings"
-```
-
-If no edits needed, skip. **Never** push the spec edit to PR #39's branch — keep it on the implementation branch and reviewers see both updates together.
+Spec edits resulting from preflight findings have already been made on the spec branch (`docs/playwright-demo-e2e-spec`, PR #39): §4.4 execution flow, §5.1 `demoUrl`, §13 open questions. No additional spec edits expected from PR-1 implementation work.
 
 ---
 
@@ -709,7 +701,8 @@ import { test, expect } from "./_fixtures/gtc-demo";
 test("helpdesk-itsm: gtcDemo fixture starts demo and exposes a reachable URL", async ({ gtcDemo }) => {
   const demo = await gtcDemo({ name: "helpdesk-itsm" });
   expect(demo.name).toBe("helpdesk-itsm");
-  expect(demo.demoUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/v1\/web\/webchat\/helpdesk-itsm\/$/);
+  // URL pattern: /v1/web/webchat/<team>/ — team default is "default", per Task 1 finding.
+  expect(demo.demoUrl).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/v1\/web\/webchat\/default\/$/);
 
   const res = await fetch(demo.demoUrl.replace(/\/v1\/web\/webchat\/.+/, "/readyz"));
   expect(res.status).toBe(200);
@@ -733,7 +726,7 @@ import { test as base, expect, type TestInfo } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { createWriteStream, existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import { allocatePort } from "./ports";
 import {
@@ -743,15 +736,21 @@ import {
 
 export interface GtcDemo {
   name: string;
+  team: string;       // setup tenant team — default "default"
+  tenant: string;     // setup tenant name — default "demo"
   port: number;
-  demoUrl: string;
+  demoUrl: string;    // http://127.0.0.1:<port>/v1/web/webchat/<team>/
   bundleDir: string;
   logFile: string;
 }
 
 export interface DemoOptions {
   name: string;
-  /** Override the default release setup-answers JSON. */
+  /** Tenant team for setup, drives the WebChat URL path. Default: "default". */
+  team?: string;
+  /** Tenant name for setup. Default: "demo". */
+  tenant?: string;
+  /** Override the patched release setup-answers JSON entirely (rare — usually patch via tests/_fixtures/demo-patches/<demoName>.json). */
   setupAnswers?: Record<string, unknown>;
   /** Extra env passed to gtc setup/start. */
   envOverrides?: Record<string, string>;
@@ -832,10 +831,67 @@ async function gtcSetup(
 ): Promise<void> {
   await runOrThrow(
     GTC_BIN,
-    ["setup", "--no-ui", bundleDir, "--answers", setupAnswersPath],
+    ["setup", "--non-interactive", bundleDir, "--answers", setupAnswersPath],
     bundleDir,
     envOverrides,
   );
+}
+
+/**
+ * Apply per-demo overlay patches to the upstream setup-answers JSON. The
+ * upstream answers (e.g. helpdesk-itsm-setup-answers.json) ship with empty
+ * strings for fields like `messaging-slack.public_base_url` that are required
+ * under `--non-interactive`. We patch them with safe placeholders for fields
+ * that are not security-sensitive, and leave real-secret fields blank so the
+ * runner skips the channel (e.g. `Webhooks: messaging-slack Error: ...`,
+ * non-fatal).
+ *
+ * Patch file lives at tests/_fixtures/demo-patches/<demoName>.json. The patch
+ * is a deep merge: keys present in the patch override; keys absent are
+ * preserved from upstream.
+ */
+async function applyAnswersPatch(
+  demoName: string,
+  upstreamAnswersPath: string,
+): Promise<string> {
+  const upstream = JSON.parse(await readFile(upstreamAnswersPath, "utf8"));
+  const patchPath = join(
+    process.cwd(),
+    "tests",
+    "_fixtures",
+    "demo-patches",
+    `${demoName}.json`,
+  );
+  if (!existsSync(patchPath)) {
+    return upstreamAnswersPath; // no patch — use upstream as-is
+  }
+  const patch = JSON.parse(await readFile(patchPath, "utf8"));
+  const merged = deepMerge(upstream, patch);
+  const dest = join(REPO_TMP_BASE, "patched-answers", `${demoName}.json`);
+  await mkdir(dirname(dest), { recursive: true });
+  await writeFile(dest, JSON.stringify(merged, null, 2));
+  return dest;
+}
+
+function deepMerge<T>(base: T, overlay: Partial<T>): T {
+  if (typeof base !== "object" || base === null) return overlay as T;
+  if (typeof overlay !== "object" || overlay === null) return base;
+  const out: Record<string, unknown> = { ...(base as Record<string, unknown>) };
+  for (const [k, v] of Object.entries(overlay as Record<string, unknown>)) {
+    if (
+      typeof v === "object" &&
+      v !== null &&
+      !Array.isArray(v) &&
+      typeof out[k] === "object" &&
+      out[k] !== null &&
+      !Array.isArray(out[k])
+    ) {
+      out[k] = deepMerge(out[k], v as Record<string, unknown>);
+    } else {
+      out[k] = v;
+    }
+  }
+  return out as T;
 }
 
 async function gtcStart(
@@ -844,16 +900,23 @@ async function gtcStart(
   logFile: string,
   envOverrides?: Record<string, string>,
 ): Promise<ChildProcess> {
-  // NOTE: --port flag assumed; if Task 1 Step 1 found a different mechanism,
-  // adapt the args/env here.
+  // Per spec §13.5 / Task 1 finding: gtc start does NOT expose --port. We call
+  // greentic-runner directly with --port and the bundle's resolved bindings
+  // path. greentic-runner is installed alongside gtc by `gtc install` (run via
+  // bootstrap-gtc.sh).
   await mkdir(join(bundleDir, "..", "logs"), { recursive: true }).catch(() => {});
   const logStream = createWriteStream(logFile, { flags: "w" });
+  const bindingsPath = join(bundleDir, "resolved");
   const proc = spawn(
-    GTC_BIN,
-    ["start", bundleDir, "--port", String(port)],
+    "greentic-runner",
+    [
+      "--port", String(port),
+      "--bindings", bindingsPath,
+      "--no-cache",
+    ],
     {
       cwd: bundleDir,
-      env: { ...process.env, ...envOverrides, GREENTIC_PORT: String(port) },
+      env: { ...process.env, ...envOverrides },
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
@@ -917,7 +980,10 @@ export const test = base.extend<{
         setupAnswersPath = join(bundleDir, "..", `setup-answers-override-${opts.name}.json`);
         await writeFile(setupAnswersPath, JSON.stringify(opts.setupAnswers, null, 2));
       } else {
-        setupAnswersPath = await downloadSetupAnswers(opts.name, releaseTag);
+        const upstreamPath = await downloadSetupAnswers(opts.name, releaseTag);
+        // Apply per-demo overlay patch to fill upstream gaps that violate
+        // --non-interactive (see Task 1 Step 5 finding + spec §13.7).
+        setupAnswersPath = await applyAnswersPatch(opts.name, upstreamPath);
       }
 
       await gtcSetup(bundleDir, setupAnswersPath, opts.envOverrides);
@@ -936,10 +1002,15 @@ export const test = base.extend<{
         throw e;
       }
 
+      const team = opts.team ?? "default";
+      const tenant = opts.tenant ?? "demo";
       const handle: RunningDemo = {
         name: opts.name,
+        team,
+        tenant,
         port,
-        demoUrl: `http://127.0.0.1:${port}/v1/web/webchat/${opts.name}/`,
+        // URL pattern uses <team>, not <demo> — confirmed against runner output 2026-04-27.
+        demoUrl: `http://127.0.0.1:${port}/v1/web/webchat/${team}/`,
         bundleDir,
         logFile,
         proc,
@@ -965,9 +1036,11 @@ export const test = base.extend<{
 export { expect };
 ```
 
-> If Task 1 Step 1 found that `gtc start` does not support `--port`, replace the `args` array and the env-var setup in `gtcStart()` with the discovered mechanism (e.g. `--listen-addr 127.0.0.1:${port}` or solely `GREENTIC_PORT`).
+> Task 1 Step 1 finding (2026-04-27): `gtc start` does NOT support `--port`. The `gtcStart()` above already reflects the correct decision — calling `greentic-runner --port <N> --bindings <bundleDir>/resolved` directly. Do not change.
 
-> If Task 1 Step 2 found that `gtc setup` consumes a different artifact than the bundle directory (e.g. needs the `.gtbundle` archive directly), update `gtcSetup` accordingly.
+> Task 1 Step 2 finding (2026-04-27): `gtc setup` operates on the bundle directory created by `gtc wizard` (not on the `.gtbundle` archive or `.gtpack`). The `gtcSetup` and `ensureBundleExtracted` above already reflect this. Do not change.
+
+> Task 1 Step 5 finding (2026-04-27): The upstream answers JSON for `helpdesk-itsm` is incomplete. The fixture overlays a per-demo patch via `applyAnswersPatch()`. The patch file at `tests/_fixtures/demo-patches/helpdesk-itsm.json` MUST be created in this task — see Step N below.
 
 - [ ] **Step 4: Run, verify the integration test passes**
 
