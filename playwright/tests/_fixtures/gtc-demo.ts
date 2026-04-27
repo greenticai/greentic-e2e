@@ -108,6 +108,7 @@ async function gtcSetup(
 
 async function applyAnswersPatch(
   demoName: string,
+  workerIndex: number,
   upstreamAnswersPath: string,
 ): Promise<string> {
   const upstream = JSON.parse(await readFile(upstreamAnswersPath, "utf8"));
@@ -123,7 +124,13 @@ async function applyAnswersPatch(
   }
   const patch = JSON.parse(await readFile(patchPath, "utf8"));
   const merged = deepMerge(upstream, patch);
-  const dest = join(REPO_TMP_BASE, "patched-answers", `${demoName}.json`);
+  // Worker-scoped path so parallel workers don't race on the same file.
+  const dest = join(
+    REPO_TMP_BASE,
+    `worker-${workerIndex}`,
+    "patched-answers",
+    `${demoName}.json`,
+  );
   await mkdir(dirname(dest), { recursive: true });
   await writeFile(dest, JSON.stringify(merged, null, 2));
   return dest;
@@ -251,7 +258,11 @@ export const test = base.extend<{
         await writeFile(setupAnswersPath, JSON.stringify(opts.setupAnswers, null, 2));
       } else {
         const upstreamPath = await downloadSetupAnswers(opts.name, releaseTag);
-        setupAnswersPath = await applyAnswersPatch(opts.name, upstreamPath);
+        setupAnswersPath = await applyAnswersPatch(
+          opts.name,
+          testInfo.workerIndex,
+          upstreamPath,
+        );
       }
 
       await gtcSetup(bundleDir, setupAnswersPath, opts.envOverrides);

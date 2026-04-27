@@ -30,13 +30,13 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - label: stable / linux
+          - label: stable-linux
             runner: ubuntu-24.04
             channel: stable
-          - label: dev / linux
+          - label: dev-linux
             runner: ubuntu-24.04
             channel: dev
-          - label: stable / macos
+          - label: stable-macos
             runner: macos-15
             channel: stable
     env:
