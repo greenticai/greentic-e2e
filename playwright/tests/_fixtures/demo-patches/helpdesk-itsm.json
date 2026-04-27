@@ -12,8 +12,12 @@
       "channel_id": "19:dummy@thread.tacv2",
       "ms_bot_app_id": "00000000-0000-0000-0000-000000000000",
       "ms_bot_app_password": "dummy_e2e_only",
+      "ms_graph_client_id": "00000000-0000-0000-0000-000000000000",
+      "ms_graph_client_secret": "dummy_graph_client_secret_e2e_only",
+      "ms_graph_tenant_id": "00000000-0000-0000-0000-000000000000",
       "public_base_url": "http://localhost:8080",
-      "team_id": "00000000-0000-0000-0000-000000000000"
+      "team_id": "00000000-0000-0000-0000-000000000000",
+      "ms_graph_refresh_token": "dummy_ms_graph_refresh_token_e2e_only_32chars_minimum_length"
     },
     "messaging-webex": {
       "default_room_id": "Y2lzY29zcGFyazovL2R1bW15",
@@ -25,6 +29,11 @@
       "base_url": "http://localhost:8080",
       "jwt_signing_key": "dummy-jwt-signing-key-for-e2e-only-32chars-min-padding",
       "tenant_channel_id": "demo-default"
+    },
+    "messaging-telegram": {
+      "public_base_url": "http://localhost:8080",
+      "api_base_url": "http://localhost:8080",
+      "telegram_bot_token": "dummy_telegram_bot_token_e2e_only_32chars_minimum_length"
     }
   }
 }
