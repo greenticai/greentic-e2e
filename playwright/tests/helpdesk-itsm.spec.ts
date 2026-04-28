@@ -14,6 +14,13 @@ test.describe("helpdesk-itsm demo (Phase 0 walking skeleton)", () => {
     const chat = new WebChat(page, demo.demoUrl);
 
     await chat.open();
+    // Wait for DirectLine to fully connect before sending — otherwise the
+    // user message lands in a local queue and the user echo shows
+    // "Sending…" status instead of being acknowledged by the runner.
+    await expect(
+      page.getByText(/Connectivity Status:\s*Connected/i),
+    ).toBeVisible({ timeout: 30_000 });
+
     await chat.send("Hello");
 
     const userArticle = page
@@ -22,8 +29,12 @@ test.describe("helpdesk-itsm demo (Phase 0 walking skeleton)", () => {
       .first();
     await expect(userArticle).toBeVisible({ timeout: 5_000 });
 
-    const pageContent = await page.content();
-    expect(pageContent, "page should not surface error markers").not.toMatch(
+    // Check VISIBLE body text — page.content() returns full HTML which
+    // includes BotFramework framework class names like
+    // 'webchat__submit-error-message' that match /error/i but are not
+    // surfaced errors.
+    const visibleText = await page.locator("body").innerText();
+    expect(visibleText, "page should not surface error markers").not.toMatch(
       ERROR_MARKERS,
     );
   });
