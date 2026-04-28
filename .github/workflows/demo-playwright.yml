@@ -90,6 +90,7 @@ jobs:
         env:
           GTC_BIN: gtc-${{ matrix.channel }}
           DEMO_FILTER: ${{ env.DEMO_FILTER }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: npx playwright test --project="${GTC_CHANNEL}"
 
       - name: Upload Playwright report

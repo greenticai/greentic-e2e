@@ -192,6 +192,16 @@ async function applyAnswersPatch(
   }
   const patch = JSON.parse(await readFile(patchPath, "utf8"));
   const merged = deepMerge(upstream, patch);
+  if (demoName === "deep-research-demo") {
+    const setupAnswers =
+      ((merged as { setup_answers?: Record<string, unknown> }).setup_answers ??= {});
+    const deepResearch =
+      ((setupAnswers["deep-research-demo"] as Record<string, unknown> | undefined) ??= {});
+    if (deepResearch["api_key_secret"] == null || deepResearch["api_key_secret"] === "") {
+      deepResearch["api_key_secret"] =
+        process.env.OPENAI_API_KEY?.trim() || "playwright-openai-placeholder";
+    }
+  }
   // Worker-scoped path so parallel workers don't race on the same file.
   const dest = join(
     REPO_TMP_BASE,
