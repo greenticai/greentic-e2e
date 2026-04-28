@@ -389,7 +389,7 @@ jobs:
           envsubst < "fixtures/setup-answers/${PROVIDER}.json" > "${ROOT}/setup-answers.json"
 
           # Setup
-          gtc setup --no-ui --answers "${ROOT}/setup-answers.json" "${BUNDLE_DIR}" \
+          gtc setup --non-interactive --answers "${ROOT}/setup-answers.json" "${BUNDLE_DIR}" \
             < /dev/null || echo "Setup exited with: $?"
 
           # Start
@@ -598,7 +598,7 @@ jobs:
           envsubst < "fixtures/setup-answers/${PROVIDER}.json" > "${ROOT}/setup-answers.json"
 
           # Setup
-          gtc setup --no-ui --answers "${ROOT}/setup-answers.json" "${BUNDLE_DIR}" \
+          gtc setup --non-interactive --answers "${ROOT}/setup-answers.json" "${BUNDLE_DIR}" \
             < /dev/null || echo "Setup exited with: $?"
 
           # Start

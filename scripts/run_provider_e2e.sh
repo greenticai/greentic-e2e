@@ -382,7 +382,7 @@ with open(output_path, 'w') as f:
   else
     SETUP_LOG="${TEMP_DIR}/gtc-setup.log"
     SETUP_EXIT=0
-    run_with_timeout "$GTC_CMD_TIMEOUT" gtc setup --no-ui --answers "${E2E_SETUP_ANSWERS}" "${E2E_BUNDLE_DIR}" \
+    run_with_timeout "$GTC_CMD_TIMEOUT" gtc setup --non-interactive --answers "${E2E_SETUP_ANSWERS}" "${E2E_BUNDLE_DIR}" \
       < /dev/null > "${SETUP_LOG}" 2>&1 || SETUP_EXIT=$?
 
     if [[ "$VERBOSE" == "true" ]]; then
