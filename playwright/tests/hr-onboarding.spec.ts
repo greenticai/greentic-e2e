@@ -68,4 +68,37 @@ test.describe("hr-onboarding demo (click-card flow)", () => {
       expect(visibleText).not.toMatch(ERROR_MARKERS);
     });
   }
+
+  // Multi-hop journey: welcome -> Start Onboarding -> employee_form
+  // -> "Confirm Registration" -> onboarding_checklist
+  // -> "Back to Menu" -> welcome_card.
+  // Validates that intermediate cards expose their own routeToCardId
+  // nav, and that the "Back to Menu" loop returns to the welcome
+  // entrypoint.
+  test("journey: welcome -> employee_form -> checklist -> back to welcome", async ({
+    page,
+    gtcDemo,
+  }) => {
+    const demo = await gtcDemo({ name: "hr-onboarding" });
+    const chat = new WebChat(page, demo.demoUrl);
+
+    await chat.open();
+    await expect(
+      page.getByText(/Connectivity Status:\s*Connected/i),
+    ).toBeVisible({ timeout: 30_000 });
+    await chat.awaitCardWithText(WELCOME_TITLE, 30_000);
+
+    await chat.clickCardAction(/Start Onboarding/i);
+    await chat.awaitCardWithText(/New Employee Registration/i, 15_000);
+
+    await chat.clickCardAction(/Confirm Registration/i);
+    await chat.awaitCardWithText(/Onboarding Checklist/i, 15_000);
+
+    // "Back to Menu" on onboarding_checklist routes back to welcome.
+    await chat.clickCardAction(/Back to Menu/i);
+    await chat.awaitCardWithText(WELCOME_TITLE, 15_000);
+
+    const visibleText = await page.locator("body").innerText();
+    expect(visibleText).not.toMatch(ERROR_MARKERS);
+  });
 });

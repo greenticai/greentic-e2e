@@ -105,4 +105,43 @@ test.describe("sales-crm demo (click-card flow)", () => {
       expect(visibleText).not.toMatch(ERROR_MARKERS);
     });
   }
+
+  // Multi-hop journey: welcome -> My Deals -> deal_detail
+  // -> "Schedule Meeting" -> meeting_card.
+  // Validates routeToCardId chains across more than one hop and that
+  // deal_detail's static demo data ("Initech Platform Upgrade",
+  // $120,000, Proposal stage) renders correctly after the click.
+  test("journey: welcome -> deal_detail -> meeting", async ({
+    page,
+    gtcDemo,
+  }) => {
+    const demo = await gtcDemo({ name: "sales-crm" });
+    const chat = new WebChat(page, demo.demoUrl);
+
+    await chat.open();
+    await expect(
+      page.getByText(/Connectivity Status:\s*Connected/i),
+    ).toBeVisible({ timeout: 30_000 });
+    await chat.awaitCardWithText(WELCOME_TITLE, 30_000);
+
+    await chat.clickCardAction(/My Deals/i);
+    await chat.awaitCardWithText(/Initech Platform Upgrade/i, 15_000);
+    await expect(
+      page.locator(".ac-container").filter({ hasText: /\$120,000/ }).first(),
+    ).toBeVisible({ timeout: 5_000 });
+    await expect(
+      page.locator(".ac-container").filter({ hasText: /Proposal/i }).first(),
+    ).toBeVisible({ timeout: 5_000 });
+
+    await chat.clickCardAction(/^Schedule Meeting$/i);
+    await chat.awaitCardWithText(/Schedule Meeting/i, 15_000);
+    // meeting_card has form inputs (not the welcome buttons).
+    await expect(
+      page.getByRole("textbox", { name: /Meeting Subject/i }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    const visibleText = await page.locator("body").innerText();
+    expect(visibleText).not.toMatch(/\{\{[a-z_]+\}\}/i);
+    expect(visibleText).not.toMatch(ERROR_MARKERS);
+  });
 });
