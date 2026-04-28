@@ -169,3 +169,7 @@ Full list of all secret env vars is in `.secrets-provider.example`.
 - `scripts/run_cloud_demo_e2e.sh` - Cloud demo lifecycle harness for AWS, Azure, and GCP. Verifies published `greentic-demo` release assets, web UI route, and optional admin tunnel flow for AWS only.
   Defaults: AWS `AWS_REGION/AWS_DEFAULT_REGION=eu-north-1`, AWS backend `s3`, Azure location `westeurope`, Azure backend `azurerm`, GCP region `us-central1`, GCP backend `gcs`.
 - `ci/run_actions.sh` - Runs nightly workflow locally via [nektos/act](https://github.com/nektos/act). Auto-installs `act` to `.bin/`. Resolves Docker host for both macOS (Docker Desktop) and Linux.
+
+## Playwright sub-package
+
+Browser-driven demo e2e lives under `playwright/`. See `playwright/README.md` for local dev workflow and `docs/superpowers/specs/2026-04-27-playwright-demo-e2e-design.md` for design.

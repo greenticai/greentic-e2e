@@ -1,0 +1,39 @@
+{
+  "setup_answers": {
+    "messaging-slack": {
+      "public_base_url": "http://localhost:8080",
+      "default_channel": "C0E2EDUMMY",
+      "slack_app_id": "A0E2EDUMMY",
+      "slack_bot_token": "xoxb-not-a-real-token-e2e-only",
+      "slack_configuration_token": "xoxe-not-a-real-token-e2e-only",
+      "slack_signing_secret": "dummy_signing_secret_e2e_only_32chars_min"
+    },
+    "messaging-teams": {
+      "channel_id": "19:dummy@thread.tacv2",
+      "ms_bot_app_id": "00000000-0000-0000-0000-000000000000",
+      "ms_bot_app_password": "dummy_e2e_only",
+      "ms_graph_client_id": "00000000-0000-0000-0000-000000000000",
+      "ms_graph_client_secret": "dummy_graph_client_secret_e2e_only",
+      "ms_graph_tenant_id": "00000000-0000-0000-0000-000000000000",
+      "public_base_url": "http://localhost:8080",
+      "team_id": "00000000-0000-0000-0000-000000000000",
+      "ms_graph_refresh_token": "dummy_ms_graph_refresh_token_e2e_only_32chars_minimum_length"
+    },
+    "messaging-webex": {
+      "default_room_id": "Y2lzY29zcGFyazovL2R1bW15",
+      "default_to_person_email": "test@example.com",
+      "public_base_url": "http://localhost:8080",
+      "webex_bot_token": "dummy-webex-token-e2e-only"
+    },
+    "messaging-webchat-gui": {
+      "base_url": "http://localhost:8080",
+      "jwt_signing_key": "596ec03de88199a33a950175b958607846a99f8b75b550f21217f16306fcd3c9",
+      "tenant_channel_id": "demo-default"
+    },
+    "messaging-telegram": {
+      "public_base_url": "http://localhost:8080",
+      "api_base_url": "http://localhost:8080",
+      "telegram_bot_token": "dummy_telegram_bot_token_e2e_only_32chars_minimum_length"
+    }
+  }
+}
