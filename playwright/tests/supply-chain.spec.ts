@@ -59,32 +59,49 @@ test.describe("supply-chain demo (click-card flow)", () => {
     );
   });
 
-  for (const { label, targetText } of NAV_BUTTONS) {
-    test(`welcome -> ${label.source}: routeToCardId dispatches target card`, async ({
-      page,
-      gtcDemo,
-    }) => {
-      const demo = await gtcDemo({ name: "supply-chain" });
-      const chat = new WebChat(page, demo.demoUrl);
+  // Combined smoke: every welcome button is exercised in a single
+  // chat session. Using one session (instead of one test per button)
+  // also validates that the messaging adapter handles back-to-back
+  // routeToCardId dispatches without state pollution between clicks.
+  // Per-button granularity is preserved via test.step() so failure
+  // reports point at the offending button.
+  test("smoke: every welcome button routes to its target card", async ({
+    page,
+    gtcDemo,
+  }) => {
+    const demo = await gtcDemo({ name: "supply-chain" });
+    const chat = new WebChat(page, demo.demoUrl);
 
-      await chat.open();
-      await expect(
-        page.getByText(/Connectivity Status:\s*Connected/i),
-      ).toBeVisible({ timeout: 30_000 });
-      await chat.awaitCardWithText(WELCOME_TITLE, 30_000);
+    await chat.open();
+    await expect(
+      page.getByText(/Connectivity Status:\s*Connected/i),
+    ).toBeVisible({ timeout: 30_000 });
+    await chat.awaitCardWithText(WELCOME_TITLE, 30_000);
 
-      await chat.clickCardAction(label);
+    for (const { label, targetText } of NAV_BUTTONS) {
+      await test.step(`click "${label.source}" -> render target card`, async () => {
+        // Cards stack in the chat transcript — count matching containers
+        // before/after the click so we verify a *new* card rendered
+        // rather than an earlier one persisting from a previous step.
+        const targetCards = page
+          .locator(".ac-container")
+          .filter({ hasText: targetText });
+        const before = await targetCards.count();
+        await chat.clickCardAction(label);
+        await expect
+          .poll(() => targetCards.count(), {
+            timeout: 15_000,
+            intervals: [500, 1_000, 2_000],
+          })
+          .toBeGreaterThan(before);
+      });
+    }
 
-      // Target card should render via routeToCardId dispatch (asset
-      // path resolves under assets/cards/<id>.json).
-      await chat.awaitCardWithText(targetText, 15_000);
-
-      const visibleText = await page.locator("body").innerText();
-      expect(visibleText, "page should not surface error markers").not.toMatch(
-        ERROR_MARKERS,
-      );
-    });
-  }
+    const visibleText = await page.locator("body").innerText();
+    expect(visibleText, "page should not surface error markers").not.toMatch(
+      ERROR_MARKERS,
+    );
+  });
 
   // Multi-hop journey: welcome -> Track Orders -> orders_search ->
   // "Find Order" -> orders_list -> "⬅️ Back" -> orders_search.

@@ -83,28 +83,43 @@ test.describe("sales-crm demo (click-card flow)", () => {
     expect(visibleText).not.toMatch(ERROR_MARKERS);
   });
 
-  for (const { label, targetText } of NAV_BUTTONS) {
-    test(`welcome -> ${label.source}: routeToCardId dispatches target card`, async ({
-      page,
-      gtcDemo,
-    }) => {
-      const demo = await gtcDemo({ name: "sales-crm" });
-      const chat = new WebChat(page, demo.demoUrl);
+  // Combined smoke: all welcome buttons clicked in one session.
+  // Validates routeToCardId dispatch + sequential interaction. Also
+  // re-checks no `{{var}}` placeholders leaked into any subsequently
+  // rendered card. test.step() preserves per-button failure reports.
+  test("smoke: every welcome button routes to its target card", async ({
+    page,
+    gtcDemo,
+  }) => {
+    const demo = await gtcDemo({ name: "sales-crm" });
+    const chat = new WebChat(page, demo.demoUrl);
 
-      await chat.open();
-      await expect(
-        page.getByText(/Connectivity Status:\s*Connected/i),
-      ).toBeVisible({ timeout: 30_000 });
-      await chat.awaitCardWithText(WELCOME_TITLE, 30_000);
+    await chat.open();
+    await expect(
+      page.getByText(/Connectivity Status:\s*Connected/i),
+    ).toBeVisible({ timeout: 30_000 });
+    await chat.awaitCardWithText(WELCOME_TITLE, 30_000);
 
-      await chat.clickCardAction(label);
-      await chat.awaitCardWithText(targetText, 15_000);
+    for (const { label, targetText } of NAV_BUTTONS) {
+      await test.step(`click "${label.source}" -> render target card`, async () => {
+        const targetCards = page
+          .locator(".ac-container")
+          .filter({ hasText: targetText });
+        const before = await targetCards.count();
+        await chat.clickCardAction(label);
+        await expect
+          .poll(() => targetCards.count(), {
+            timeout: 15_000,
+            intervals: [500, 1_000, 2_000],
+          })
+          .toBeGreaterThan(before);
+      });
+    }
 
-      const visibleText = await page.locator("body").innerText();
-      expect(visibleText).not.toMatch(/\{\{[a-z_]+\}\}/i);
-      expect(visibleText).not.toMatch(ERROR_MARKERS);
-    });
-  }
+    const visibleText = await page.locator("body").innerText();
+    expect(visibleText).not.toMatch(/\{\{[a-z_]+\}\}/i);
+    expect(visibleText).not.toMatch(ERROR_MARKERS);
+  });
 
   // Multi-hop journey: welcome -> My Deals -> deal_detail
   // -> "Schedule Meeting" -> meeting_card.
