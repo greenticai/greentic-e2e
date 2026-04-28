@@ -42,11 +42,32 @@ async function ensureBundleExtracted(
   workerIndex: number,
   releaseTag: string,
 ): Promise<string> {
+  // gtc wizard's output directory naming is not consistent across demos.
+  // Common patterns observed in greentic-demo v0.1.65:
+  //   helpdesk-itsm  →  helpdesk-itsm-demo-bundle
+  //   deep-research-demo → deep-research-demo-bundle  (no extra '-demo-')
+  //   telco-x-demo  →  telco-x-demo-bundle  (no extra '-demo-')
+  // We try the canonical pattern first, then fall back to the demo-name as
+  // a prefix variants observed in upstream releases.
   const cacheDir = join(REPO_TMP_BASE, `worker-${workerIndex}`, demoName);
-  const bundlePath = join(cacheDir, `${demoName}-demo-bundle`);
-  if (existsSync(join(bundlePath, "bundle.yaml"))) {
-    return bundlePath;
-  }
+  const candidates = [
+    `${demoName}-demo-bundle`,
+    `${demoName}-bundle`,
+    `${demoName}-demo`,
+    demoName,
+  ];
+
+  const findExisting = (): string | null => {
+    for (const cand of candidates) {
+      const p = join(cacheDir, cand);
+      if (existsSync(join(p, "bundle.yaml"))) return p;
+    }
+    return null;
+  };
+
+  const cached = findExisting();
+  if (cached) return cached;
+
   await mkdir(cacheDir, { recursive: true });
 
   const createAnswersPath = await ensureAsset(
@@ -55,10 +76,15 @@ async function ensureBundleExtracted(
   );
   await runOrThrow(GTC_BIN, ["wizard", "--answers", createAnswersPath], cacheDir);
 
-  if (!existsSync(bundlePath)) {
-    throw new Error(`expected ${bundlePath} after gtc wizard, not found`);
+  const found = findExisting();
+  if (!found) {
+    throw new Error(
+      `bundle dir not found for ${demoName} after gtc wizard; checked ${candidates
+        .map((c) => `${cacheDir}/${c}`)
+        .join(", ")}`,
+    );
   }
-  return bundlePath;
+  return found;
 }
 
 async function downloadSetupAnswers(
