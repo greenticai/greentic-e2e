@@ -67,7 +67,15 @@ export class WebChat {
   }
 
   async clickCardAction(label: string | RegExp): Promise<void> {
-    await this.page.getByRole("button", { name: label }).click();
+    // Adaptive Cards renders Action.Submit as <button class="ac-pushButton">
+    // with the title both as inner text and aria-label. BotFramework also
+    // emits a hidden accessibility-region <button> with the same name, so a
+    // bare getByRole('button', {name: label}) trips strict-mode.
+    // Scope to .ac-pushButton + filter by visible text.
+    const button = this.page
+      .locator("button.ac-pushButton")
+      .filter({ hasText: label });
+    await button.first().click();
   }
 
   private botMessageSelector(): Locator {
