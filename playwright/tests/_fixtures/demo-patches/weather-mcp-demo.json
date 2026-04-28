@@ -1,0 +1,8 @@
+{
+  "setup_answers": {
+    "weatherapi-pack": {
+      "auth_param_get_weather_key": "dummy_auth_param_get_weather_key_e2e_only_32chars_minimum_length_xxxxxxxx",
+      "auth_param_get_forecast_weather_key": "dummy_auth_param_get_forecast_weather_key_e2e_only_32chars_minimum_length_xxxxxxxx"
+    }
+  }
+}

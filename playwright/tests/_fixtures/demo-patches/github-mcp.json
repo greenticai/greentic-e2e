@@ -1,0 +1,8 @@
+{
+  "setup_answers": {
+    "oauth-oidc-generic": {
+      "client_id": "00000000-0000-0000-0000-000000000000",
+      "client_secret": "dummy_client_secret_e2e_only_32chars_minimum_length_xxxxxxxx"
+    }
+  }
+}
