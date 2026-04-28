@@ -36,9 +36,13 @@ jobs:
           - label: dev-linux
             runner: ubuntu-24.04
             channel: dev
-          - label: stable-macos
-            runner: macos-15
-            channel: stable
+          # stable-macos is intentionally dropped from PR-1 matrix because
+          # `gtc install` falls back to `greentic-setup@0.5.1` on macOS
+          # (Maarten's Fix 2 `--non-interactive` only ships in 0.5.2 and
+          # the macOS aarch64 artifact for 0.5.2 is missing/broken in
+          # the GitHub release for the greentic-setup repo). Restore the
+          # cell once the upstream artifact is published. See PR-1
+          # punch-list item #6.
     env:
       GTC_CHANNEL: ${{ matrix.channel }}
       DEMO_FILTER: ${{ inputs.demo_filter || 'all' }}
