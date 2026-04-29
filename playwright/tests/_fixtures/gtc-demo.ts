@@ -2,9 +2,9 @@ import { test as base, expect, type TestInfo } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, writeFile, readFile, chmod } from "node:fs/promises";
 import { createWriteStream, existsSync } from "node:fs";
+import { createServer } from "node:net";
 import { join, dirname } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
-import { allocatePort } from "./ports";
 import {
   ensureAsset,
   demoAssetNames,
@@ -143,34 +143,37 @@ async function gtcSetup(
  * Reads the values from the patched setup-answers JSON, so any value override
  * via DemoOptions.setupAnswers or the demo's patch file is honored.
  */
-async function seedWebchatSecrets(
+async function seedSetupAnswerSecrets(
   bundleDir: string,
   setupAnswersPath: string,
   team: string,
 ): Promise<void> {
   const answers = JSON.parse(await readFile(setupAnswersPath, "utf8"));
-  const webchat = answers?.setup_answers?.["messaging-webchat-gui"];
-  if (!webchat || typeof webchat !== "object") return;
+  const setupAnswers = answers?.setup_answers;
+  if (!setupAnswers || typeof setupAnswers !== "object") return;
 
   const storePath = join(bundleDir, ".greentic", "dev", ".dev.secrets.env");
   await mkdir(dirname(storePath), { recursive: true });
 
-  for (const [name, value] of Object.entries(webchat)) {
-    if (typeof value !== "string") continue;
-    await runOrThrow(
-      "greentic-secrets",
-      [
-        "admin", "set",
-        "--env", "dev",
-        "--tenant", team,
-        "--store-path", storePath,
-        "--visibility", "team",
-        "--category", "messaging-webchat-gui",
-        "--name", name,
-        "--value", value,
-      ],
-      bundleDir,
-    );
+  for (const [category, secrets] of Object.entries(setupAnswers)) {
+    if (!secrets || typeof secrets !== "object") continue;
+    for (const [name, value] of Object.entries(secrets)) {
+      if (typeof value !== "string") continue;
+      await runOrThrow(
+        "greentic-secrets",
+        [
+          "admin", "set",
+          "--env", "dev",
+          "--tenant", team,
+          "--store-path", storePath,
+          "--visibility", "team",
+          "--category", category,
+          "--name", name,
+          "--value", value,
+        ],
+        bundleDir,
+      );
+    }
   }
 }
 
@@ -178,6 +181,7 @@ async function applyAnswersPatch(
   demoName: string,
   workerIndex: number,
   upstreamAnswersPath: string,
+  port: number,
 ): Promise<string> {
   const upstream = JSON.parse(await readFile(upstreamAnswersPath, "utf8"));
   const patchPath = join(
@@ -191,7 +195,18 @@ async function applyAnswersPatch(
     return upstreamAnswersPath;
   }
   const patch = JSON.parse(await readFile(patchPath, "utf8"));
-  const merged = deepMerge(upstream, patch);
+  const merged = rewriteLocalhostPort(deepMerge(upstream, patch), port);
+  if (demoName === "weather-mcp-demo") {
+    const weatherApiKey = process.env.WEATHER_API_KEY?.trim();
+    const setupAnswers =
+      ((merged as { setup_answers?: Record<string, unknown> }).setup_answers ??= {});
+    const weather =
+      ((setupAnswers["weatherapi-pack"] as Record<string, unknown> | undefined) ??= {});
+    if (weatherApiKey) {
+      weather["auth_param_get_weather_key"] = weatherApiKey;
+      weather["auth_param_get_forecast_weather_key"] = weatherApiKey;
+    }
+  }
   if (demoName === "deep-research-demo") {
     const setupAnswers =
       ((merged as { setup_answers?: Record<string, unknown> }).setup_answers ??= {});
@@ -212,6 +227,41 @@ async function applyAnswersPatch(
   await mkdir(dirname(dest), { recursive: true });
   await writeFile(dest, JSON.stringify(merged, null, 2));
   return dest;
+}
+
+function rewriteLocalhostPort<T>(value: T, port: number): T {
+  if (typeof value === "string") {
+    return value
+      .replaceAll("http://localhost:8080", `http://localhost:${port}`)
+      .replaceAll("http://127.0.0.1:8080", `http://127.0.0.1:${port}`) as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => rewriteLocalhostPort(entry, port)) as T;
+  }
+  if (typeof value === "object" && value !== null) {
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = rewriteLocalhostPort(entry, port);
+    }
+    return out as T;
+  }
+  return value;
+}
+
+async function findFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      if (!address || typeof address === "string") {
+        server.close(() => reject(new Error("failed to resolve free port")));
+        return;
+      }
+      const { port } = address;
+      server.close((err) => (err ? reject(err) : resolve(port)));
+    });
+    server.on("error", reject);
+  });
 }
 
 function deepMerge<T>(base: T, overlay: Partial<T>): T {
@@ -269,6 +319,7 @@ async function ensureNoOpenShim(): Promise<string> {
 async function gtcStart(
   bundleDir: string,
   logFile: string,
+  port: number,
   envOverrides?: Record<string, string>,
 ): Promise<ChildProcess> {
   // greentic-runner --bindings expects extracted .gtbind files which only exist
@@ -286,6 +337,8 @@ async function gtcStart(
   const startEnv: Record<string, string> = {
     ...(process.env as Record<string, string>),
     ...envOverrides,
+    GREENTIC_GATEWAY_LISTEN_ADDR: "127.0.0.1",
+    GREENTIC_GATEWAY_PORT: String(port),
     PATH: `${noOpenShimDir}:${process.env.PATH ?? ""}`,
   };
   const proc = spawn(
@@ -363,10 +416,7 @@ export const test = base.extend<{
       }
 
       // greentic-start does not expose --port; runner uses default 8080.
-      // Tests must run with workers: 1 (set in playwright.config.ts) to avoid
-      // collision. The allocatePort helper is kept for future when an upstream
-      // port flag lands.
-      const port = 8080;
+      const port = await findFreePort();
       const releaseTag = opts.releaseTag ?? "latest";
 
       const bundleDir = await ensureBundleExtracted(opts.name, testInfo.workerIndex, releaseTag);
@@ -381,6 +431,7 @@ export const test = base.extend<{
           opts.name,
           testInfo.workerIndex,
           upstreamPath,
+          port,
         );
       }
 
@@ -388,13 +439,12 @@ export const test = base.extend<{
 
       const team = opts.team ?? "default";
       const tenant = opts.tenant ?? "demo";
-      // Populate dev-store with messaging-webchat-gui secrets so the runner
-      // can issue DirectLine tokens. Without this, WebChat HTML loads but the
-      // token endpoint returns 500.
-      await seedWebchatSecrets(bundleDir, setupAnswersPath, team);
+      // Populate dev-store with setup-answer secrets before startup.
+      // Weather and webchat demos both resolve auth through this store.
+      await seedSetupAnswerSecrets(bundleDir, setupAnswersPath, team);
 
       const logFile = join(bundleDir, "..", `gtc-${opts.name}-w${testInfo.workerIndex}.log`);
-      const proc = await gtcStart(bundleDir, logFile, opts.envOverrides);
+      const proc = await gtcStart(bundleDir, logFile, port, opts.envOverrides);
 
       try {
         await waitForReady(port, proc);
