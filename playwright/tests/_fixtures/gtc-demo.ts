@@ -1,6 +1,6 @@
 import { test as base, expect, type TestInfo } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir, writeFile, readFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile, chmod } from "node:fs/promises";
 import { createWriteStream, existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -235,6 +235,37 @@ function deepMerge<T>(base: T, overlay: Partial<T>): T {
   return out as T;
 }
 
+/**
+ * greentic-start unconditionally invokes the `open` crate's
+ * `open::that(url)` after `/readyz` to spawn the demo URL in the
+ * developer's default browser (runtime.rs:1234). On macOS this goes
+ * through `/usr/bin/open`; on Linux through `xdg-open`. Both are
+ * looked up via PATH.
+ *
+ * In Playwright, every test launches its own `greentic-start`
+ * process — so without intervention the developer sees a fresh
+ * browser tab pop up per test (~19 tabs for the click-card suite).
+ *
+ * Mitigation: prepend a tmpdir containing no-op `open`/`xdg-open`
+ * scripts to PATH for the spawned `greentic-start`. The auto-open
+ * call returns success silently and no browser tab is launched. The
+ * Playwright-controlled headless Chromium continues to work because
+ * it does not rely on these binaries.
+ */
+async function ensureNoOpenShim(): Promise<string> {
+  const shimDir = join(REPO_TMP_BASE, "no-open-shim");
+  const shimContent = "#!/bin/sh\nexit 0\n";
+  for (const name of ["open", "xdg-open"]) {
+    const path = join(shimDir, name);
+    if (!existsSync(path)) {
+      await mkdir(shimDir, { recursive: true });
+      await writeFile(path, shimContent);
+      await chmod(path, 0o755);
+    }
+  }
+  return shimDir;
+}
+
 async function gtcStart(
   bundleDir: string,
   logFile: string,
@@ -251,6 +282,12 @@ async function gtcStart(
   // demos × ~1min ≈ 12 min wall clock per matrix cell).
   await mkdir(join(bundleDir, "..", "logs"), { recursive: true }).catch(() => {});
   const logStream = createWriteStream(logFile, { flags: "w" });
+  const noOpenShimDir = await ensureNoOpenShim();
+  const startEnv: Record<string, string> = {
+    ...(process.env as Record<string, string>),
+    ...envOverrides,
+    PATH: `${noOpenShimDir}:${process.env.PATH ?? ""}`,
+  };
   const proc = spawn(
     "greentic-start",
     [
@@ -262,7 +299,7 @@ async function gtcStart(
     ],
     {
       cwd: bundleDir,
-      env: { ...process.env, ...envOverrides },
+      env: startEnv,
       stdio: ["ignore", "pipe", "pipe"],
     },
   );
