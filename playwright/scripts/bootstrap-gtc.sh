@@ -49,10 +49,60 @@ run_gtc_install() {
   "$bin" install
 }
 
+# Workaround for greentic-repo bug: when invoked as `gtc-dev`, the gtc
+# binary rewrites companion binary names to a `-dev` suffix (see
+# `companion_binary_for_invocation` in greentic/src/bin/gtc/process.rs).
+# But `gtc install` installs companions with their canonical names
+# (`greentic-deployer`, not `greentic-deployer-dev`), so the post-install
+# `ensure_deployer_dist_pack` step fails with ENOENT when it tries to
+# spawn `greentic-deployer-dev`. Symlink the canonical names to
+# `<name>-dev` so the dev gtc resolves them. Stable is unaffected.
+link_dev_companions() {
+  local bin_dir="$HOME/.cargo/bin"
+  local companions=(
+    greentic-bundle
+    greentic-component
+    greentic-deployer
+    greentic-dev
+    greentic-flow
+    greentic-gui
+    greentic-mcp
+    greentic-operator
+    greentic-pack
+    greentic-runner
+    greentic-secrets
+    greentic-setup
+    greentic-start
+  )
+  for name in "${companions[@]}"; do
+    if [[ -x "$bin_dir/$name" && ! -e "$bin_dir/$name-dev" ]]; then
+      ln -s "$bin_dir/$name" "$bin_dir/$name-dev"
+    fi
+  done
+}
+
 # Best-effort cleanup of any prior runner before we start
 pkill -f greentic-runner 2>/dev/null || true
 
 ensure_rust
+
+# The first `gtc-dev install` invocation installs every companion binary
+# but crashes at the final `ensure_deployer_dist_pack` step (it tries to
+# spawn `greentic-deployer-dev`, which does not exist yet). We let that
+# first attempt fail intentionally, then create the `-dev` symlinks for
+# all companions, then re-run `gtc install` — cargo binstall skips
+# already-installed packages so the second run is fast and reaches the
+# dist-pack step with the symlink in place.
+run_gtc_install_dev() {
+  local bin="$1"
+  echo "[bootstrap] running '$bin install' (first pass — companions)"
+  set +e
+  "$bin" install
+  set -e
+  link_dev_companions
+  echo "[bootstrap] running '$bin install' (second pass — dist pack)"
+  "$bin" install
+}
 
 case "$channel" in
   stable)
@@ -61,13 +111,13 @@ case "$channel" in
     ;;
   dev)
     install_dev
-    run_gtc_install "$HOME/.cargo/bin/gtc-dev"
+    run_gtc_install_dev "$HOME/.cargo/bin/gtc-dev"
     ;;
   both)
     install_stable
     install_dev
     run_gtc_install "$HOME/.cargo/bin/gtc-stable"
-    run_gtc_install "$HOME/.cargo/bin/gtc-dev"
+    run_gtc_install_dev "$HOME/.cargo/bin/gtc-dev"
     ;;
   *)
     echo "::error::unknown channel: $channel" >&2
