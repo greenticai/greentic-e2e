@@ -37,6 +37,36 @@ interface RunningDemo extends GtcDemo {
 const GTC_BIN = process.env.GTC_BIN ?? "gtc";
 const REPO_TMP_BASE = join(process.cwd(), "tmp");
 
+function maskSecret(s: string): string {
+  if (s.length <= 8) return "****";
+  return `${s.slice(0, 4)}…${s.slice(-4)} (len=${s.length})`;
+}
+
+const ENV_PLACEHOLDER_DEFAULTS: Record<string, string> = {
+  OPENAI_MODEL: "gpt-4o-mini",
+};
+
+function substituteEnvPlaceholders<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.replace(/\$\{([A-Z0-9_]+)\}/g, (_, name: string) => {
+      const fromEnv = process.env[name]?.trim();
+      if (fromEnv) return fromEnv;
+      return ENV_PLACEHOLDER_DEFAULTS[name] ?? "";
+    }) as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => substituteEnvPlaceholders(entry)) as T;
+  }
+  if (typeof value === "object" && value !== null) {
+    const out: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+      out[key] = substituteEnvPlaceholders(entry);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 async function ensureBundleExtracted(
   demoName: string,
   workerIndex: number,
@@ -233,7 +263,24 @@ async function applyAnswersPatch(
   const patch = existsSync(patchPath)
     ? JSON.parse(await readFile(patchPath, "utf8"))
     : {};
-  const merged = rewriteLocalhostPort(deepMerge(upstream, patch), port);
+  // The deep-research-demo patch declares a cloud-LLM override gated on
+  // OPENAI_API_KEY (see demo-patches/deep-research-demo.json). When the
+  // key is missing, drop the override entirely so the upstream local-LLM
+  // (Ollama) defaults survive for the LOCAL_LLM=1 path.
+  if (
+    demoName === "deep-research-demo" &&
+    !process.env.OPENAI_API_KEY?.trim()
+  ) {
+    const patchSetupAnswers = (patch as { setup_answers?: Record<string, unknown> })
+      .setup_answers;
+    if (patchSetupAnswers && "deep-research-demo" in patchSetupAnswers) {
+      delete patchSetupAnswers["deep-research-demo"];
+    }
+  }
+  const merged = rewriteLocalhostPort(
+    substituteEnvPlaceholders(deepMerge(upstream, patch)),
+    port,
+  );
   // Upstream setup-answers omit platform_setup.tunnel, so `gtc setup` falls
   // back to a stdin selector ("Cloudflare / ngrok / No tunnel") that never
   // gets a keystroke under Playwright. Force "no tunnel" for all demos.
@@ -258,9 +305,18 @@ async function applyAnswersPatch(
       ((merged as { setup_answers?: Record<string, unknown> }).setup_answers ??= {});
     const deepResearch =
       ((setupAnswers["deep-research-demo"] as Record<string, unknown> | undefined) ??= {});
-    if (deepResearch["api_key_secret"] == null || deepResearch["api_key_secret"] === "") {
-      deepResearch["api_key_secret"] =
-        process.env.OPENAI_API_KEY?.trim() || "playwright-openai-placeholder";
+    const provider = deepResearch["provider"];
+    const model = deepResearch["model"];
+    const url = deepResearch["url"];
+    const apiKey = deepResearch["api_key_secret"];
+    if (provider === "openai") {
+      console.log(
+        `[deep-research-demo] llm=cloud provider=openai model=${model} url=${url} key=${typeof apiKey === "string" ? maskSecret(apiKey) : "<unset>"}`,
+      );
+    } else {
+      console.log(
+        `[deep-research-demo] llm=local provider=${provider ?? "<unset>"} model=${model ?? "<unset>"} url=${url ?? "<unset>"} (LOCAL_LLM=${process.env.LOCAL_LLM ?? "<unset>"})`,
+      );
     }
   }
   // Worker-scoped path so parallel workers don't race on the same file.

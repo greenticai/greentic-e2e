@@ -1,1 +1,10 @@
-{"setup_answers":{}}
+{
+  "setup_answers": {
+    "deep-research-demo": {
+      "provider": "openai",
+      "url": "https://api.openai.com/v1",
+      "model": "${OPENAI_MODEL}",
+      "api_key_secret": "${OPENAI_API_KEY}"
+    }
+  }
+}
