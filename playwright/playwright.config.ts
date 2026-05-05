@@ -14,6 +14,11 @@ const browserUse = {
 
 export default defineConfig({
   testDir: "./tests",
+  // Only the two demos that have been ported to the Adaptive Card driving
+  // pattern (weather-mcp-demo, deep-research-demo) run today. The other
+  // *.spec.ts files are walking-skeleton placeholders — re-enable them
+  // once each one fills its card form + asserts on the LLM/tool reply.
+  testMatch: ["weather-mcp-demo.spec.ts", "deep-research-demo.spec.ts"],
   // Serialize tests: greentic-start does not expose --port and binds the runner
   // to default 8080, so two concurrent demos would collide. Tests are short
   // (~30s each) so serialization is acceptable for now.
