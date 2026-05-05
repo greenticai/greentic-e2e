@@ -103,8 +103,10 @@ async function runOrThrow(
   cwd: string,
   env?: Record<string, string>,
 ): Promise<void> {
+  // gtc subcommands require a TTY to avoid "IO error: not a terminal"
+  const wrapped = wrapWithPty(cmd, args);
   return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, {
+    const p = spawn(wrapped.cmd, wrapped.args, {
       cwd,
       env: { ...process.env, ...env },
       stdio: ["ignore", "pipe", "pipe"],
@@ -119,6 +121,22 @@ async function runOrThrow(
   });
 }
 
+function wrapWithPty(cmd: string, args: string[]): { cmd: string; args: string[] } {
+  if (process.platform === "darwin") {
+    return { cmd: "script", args: ["-q", "/dev/null", cmd, ...args] };
+  }
+  if (process.platform === "linux") {
+    const shellCmd = [cmd, ...args].map(shellQuote).join(" ");
+    return { cmd: "script", args: ["-qec", shellCmd, "/dev/null"] };
+  }
+  return { cmd, args };
+}
+
+function shellQuote(s: string): string {
+  if (/^[A-Za-z0-9_./:=+-]+$/.test(s)) return s;
+  return `'${s.replace(/'/g, "'\\''")}'`;
+}
+
 async function gtcSetup(
   bundleDir: string,
   setupAnswersPath: string,
@@ -126,7 +144,7 @@ async function gtcSetup(
 ): Promise<void> {
   await runOrThrow(
     GTC_BIN,
-    ["setup", "--non-interactive", bundleDir, "--answers", setupAnswersPath],
+    ["setup", "--no-ui", bundleDir, "--answers", setupAnswersPath],
     bundleDir,
     envOverrides,
   );
@@ -412,6 +430,19 @@ export const test = base.extend<{
       for (const key of opts.skipIfMissingSecrets ?? []) {
         if (!process.env[key]) {
           testInfo.skip(true, `missing env var: ${key}`);
+        }
+      }
+
+      // weather-mcp-demo requires WEATHER_API_KEY; fail on CI if missing, skip locally
+      if (opts.name === "weather-mcp-demo") {
+        const isCI = !!process.env.GITHUB_ACTIONS;
+        if (!process.env.WEATHER_API_KEY?.trim()) {
+          const message = "WEATHER_API_KEY env var not set (required for weather API calls)";
+          if (isCI) {
+            throw new Error(`[CI] ${message}`);
+          } else {
+            testInfo.skip(true, message);
+          }
         }
       }
 
