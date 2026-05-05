@@ -2,9 +2,15 @@
 # playwright/scripts/bootstrap-gtc.sh
 # Install gtc per channel for the Playwright e2e suite.
 # Usage: bootstrap-gtc.sh stable|dev|both
+#
+# The "stable" channel pins to a specific toolchain release via
+# `gtc install --force --release ${GTC_RELEASE}`. We can't rely on the
+# stable cargo binstall channel alone because the underlying toolchain
+# release context can drift behind the binary version.
 set -euo pipefail
 
 channel="${1:?usage: bootstrap-gtc.sh stable|dev|both}"
+GTC_RELEASE="${GTC_RELEASE:-1.0.17}"
 
 ensure_rust() {
   if ! command -v cargo >/dev/null 2>&1; then
@@ -45,8 +51,8 @@ install_dev() {
 
 run_gtc_install() {
   local bin="$1"
-  echo "[bootstrap] running '$bin install' (also exercises Maarten's Fix 1)"
-  "$bin" install
+  echo "[bootstrap] running '$bin install --force --release $GTC_RELEASE'"
+  "$bin" install --force --release "$GTC_RELEASE"
 }
 
 # Workaround for greentic-repo bug: when invoked as `gtc-dev`, the gtc

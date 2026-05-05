@@ -1,7 +1,7 @@
 import { test as base, expect, type TestInfo } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
 import { mkdir, writeFile, readFile, chmod } from "node:fs/promises";
-import { createWriteStream, existsSync } from "node:fs";
+import { createWriteStream, existsSync, readFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { join, dirname } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -102,6 +102,7 @@ async function runOrThrow(
   args: string[],
   cwd: string,
   env?: Record<string, string>,
+  timeoutMs = 90_000,
 ): Promise<void> {
   // gtc subcommands require a TTY to avoid "IO error: not a terminal"
   const wrapped = wrapWithPty(cmd, args);
@@ -111,13 +112,30 @@ async function runOrThrow(
       env: { ...process.env, ...env },
       stdio: ["ignore", "pipe", "pipe"],
     });
+    let stdout = "";
     let stderr = "";
+    p.stdout?.on("data", (d) => (stdout += d.toString()));
     p.stderr?.on("data", (d) => (stderr += d.toString()));
+    const timer = setTimeout(() => {
+      // Kill the PTY wrapper AND its grandchild — `script -q /dev/null cmd`
+      // on macOS won't always exit when its child does, leaving zombie
+      // gtc setups that block subsequent runs.
+      try { p.kill("SIGKILL"); } catch {}
+      reject(
+        new Error(
+          `${cmd} ${args.join(" ")} timed out after ${timeoutMs}ms\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+        ),
+      );
+    }, timeoutMs);
     p.on("exit", (code) => {
+      clearTimeout(timer);
       if (code === 0) resolve();
-      else reject(new Error(`${cmd} ${args.join(" ")} exited ${code}\n${stderr}`));
+      else reject(new Error(`${cmd} ${args.join(" ")} exited ${code}\nstdout:\n${stdout}\nstderr:\n${stderr}`));
     });
-    p.on("error", reject);
+    p.on("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
   });
 }
 
@@ -142,9 +160,12 @@ async function gtcSetup(
   setupAnswersPath: string,
   envOverrides?: Record<string, string>,
 ): Promise<void> {
+  // --non-interactive: fail fast on missing answers instead of prompting on
+  // stdin (which never gets read because Node sets stdio.stdin = "ignore").
+  // --no-ui:          skip the web UI launch.
   await runOrThrow(
     GTC_BIN,
-    ["setup", "--no-ui", bundleDir, "--answers", setupAnswersPath],
+    ["setup", "--non-interactive", "--no-ui", bundleDir, "--answers", setupAnswersPath],
     bundleDir,
     envOverrides,
   );
@@ -209,11 +230,18 @@ async function applyAnswersPatch(
     "demo-patches",
     `${demoName}.json`,
   );
-  if (!existsSync(patchPath)) {
-    return upstreamAnswersPath;
-  }
-  const patch = JSON.parse(await readFile(patchPath, "utf8"));
+  const patch = existsSync(patchPath)
+    ? JSON.parse(await readFile(patchPath, "utf8"))
+    : {};
   const merged = rewriteLocalhostPort(deepMerge(upstream, patch), port);
+  // Upstream setup-answers omit platform_setup.tunnel, so `gtc setup` falls
+  // back to a stdin selector ("Cloudflare / ngrok / No tunnel") that never
+  // gets a keystroke under Playwright. Force "no tunnel" for all demos.
+  // Keep an existing answer if the demo overlay sets one explicitly.
+  const platformSetup = ((merged as { platform_setup?: Record<string, unknown> }).platform_setup ??= {});
+  if (platformSetup.tunnel == null) {
+    platformSetup.tunnel = { kind: "none" };
+  }
   if (demoName === "weather-mcp-demo") {
     const weatherApiKey = process.env.WEATHER_API_KEY?.trim();
     const setupAnswers =
@@ -306,19 +334,9 @@ function deepMerge<T>(base: T, overlay: Partial<T>): T {
 /**
  * greentic-start unconditionally invokes the `open` crate's
  * `open::that(url)` after `/readyz` to spawn the demo URL in the
- * developer's default browser (runtime.rs:1234). On macOS this goes
- * through `/usr/bin/open`; on Linux through `xdg-open`. Both are
- * looked up via PATH.
- *
- * In Playwright, every test launches its own `greentic-start`
- * process — so without intervention the developer sees a fresh
- * browser tab pop up per test (~19 tabs for the click-card suite).
- *
- * Mitigation: prepend a tmpdir containing no-op `open`/`xdg-open`
- * scripts to PATH for the spawned `greentic-start`. The auto-open
- * call returns success silently and no browser tab is launched. The
- * Playwright-controlled headless Chromium continues to work because
- * it does not rely on these binaries.
+ * developer's default browser. Recent gtc/greentic-start exposes
+ * `--no-browser` to suppress this. For older toolchains we fall back
+ * to a PATH shim that no-ops `open`/`xdg-open`.
  */
 async function ensureNoOpenShim(): Promise<string> {
   const shimDir = join(REPO_TMP_BASE, "no-open-shim");
@@ -334,25 +352,34 @@ async function ensureNoOpenShim(): Promise<string> {
   return shimDir;
 }
 
+function tailLog(logFile: string, lines = 100): void {
+  try {
+    const content = readFileSync(logFile, "utf8");
+    const tail = content.split("\n").slice(-lines).join("\n");
+    console.log(`\n=== gtc log (last ${lines} lines): ${logFile} ===\n${tail}\n=== end gtc log ===`);
+  } catch {
+    console.log(`[gtc-demo] log not readable: ${logFile}`);
+  }
+}
+
 async function gtcStart(
   bundleDir: string,
   logFile: string,
   port: number,
   envOverrides?: Record<string, string>,
 ): Promise<ChildProcess> {
-  // greentic-runner --bindings expects extracted .gtbind files which only exist
-  // after greentic-start mounts the bundle's squashfs. Calling runner directly
-  // errors with "at least one gtbind file is required". Use greentic-start
-  // start --config bundle.yaml — it handles the squashfs mount + spawns the
-  // runner with correct bindings. Trade-off: greentic-start does not expose a
-  // --port flag (only --admin-port), so the runner binds to its default 8080.
-  // Tests run with workers: 1 (serialized) to avoid port collision; this is
-  // acceptable for the PR-1 walking skeleton (one demo) and for PR-2 (~12
-  // demos × ~1min ≈ 12 min wall clock per matrix cell).
+  // greentic-runner --bindings expects extracted .gtbind files which only
+  // exist after greentic-start mounts the bundle's squashfs. Use
+  // greentic-start directly (gtc start --no-browser passes through to it on
+  // gtc >= 1.0.18, but the --no-browser flag itself lives on greentic-start).
+  // Trade-off: greentic-start does not expose a --port flag (only
+  // --admin-port), so the runner binds to its default 8080. Tests run with
+  // workers: 1 (serialized) to avoid port collision.
   await mkdir(join(bundleDir, "..", "logs"), { recursive: true }).catch(() => {});
   const logStream = createWriteStream(logFile, { flags: "w" });
   const noOpenShimDir = await ensureNoOpenShim();
   const startEnv: Record<string, string> = {
+    RUST_LOG: "info",
     ...(process.env as Record<string, string>),
     ...envOverrides,
     GREENTIC_GATEWAY_LISTEN_ADDR: "127.0.0.1",
@@ -366,6 +393,7 @@ async function gtcStart(
       "--config", join(bundleDir, "bundle.yaml"),
       "--cloudflared", "off",
       "--ngrok", "off",
+      "--no-browser",
       "--quiet",
     ],
     {
@@ -475,12 +503,14 @@ export const test = base.extend<{
       await seedSetupAnswerSecrets(bundleDir, setupAnswersPath, team);
 
       const logFile = join(bundleDir, "..", `gtc-${opts.name}-w${testInfo.workerIndex}.log`);
+      console.log(`[gtc-demo] log → ${logFile}`);
       const proc = await gtcStart(bundleDir, logFile, port, opts.envOverrides);
 
       try {
         await waitForReady(port, proc);
       } catch (e) {
         await stopGtc(proc);
+        tailLog(logFile);
         await testInfo.attach(`gtc-log-${opts.name}-startup-fail`, {
           path: logFile,
           contentType: "text/plain",
@@ -507,6 +537,7 @@ export const test = base.extend<{
     for (const h of created) {
       await stopGtc(h.proc);
       if (testInfo.status === "failed" || testInfo.status === "timedOut") {
+        tailLog(h.logFile);
         await testInfo.attach(`gtc-log-${h.name}`, {
           path: h.logFile,
           contentType: "text/plain",
