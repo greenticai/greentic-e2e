@@ -1,5 +1,8 @@
 {
   "setup_answers": {
+    "state-redis": {
+      "redis_url": "redis://127.0.0.1:6379"
+    },
     "deep-research-demo": {
       "provider": "openai",
       "url": "https://api.openai.com/v1",
