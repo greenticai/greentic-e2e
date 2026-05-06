@@ -15,7 +15,7 @@ const browserUse = {
 export default defineConfig({
   testDir: "./tests",
   // Active specs:
-  //   - weather-mcp-demo, deep-research-demo: Adaptive Card driving pattern.
+  //   - weather-mcp-demo, deep-research-demo, telco-x-demo: Adaptive Card driving pattern.
   //   - redbutton-demo: HTTP events-webhook ingress (no browser/card flow).
   // Other *.spec.ts files are walking-skeleton placeholders — re-enable
   // them once each one drives its card form + asserts on the LLM/tool
@@ -24,6 +24,7 @@ export default defineConfig({
     "weather-mcp-demo.spec.ts",
     "deep-research-demo.spec.ts",
     "redbutton-demo.spec.ts",
+    "telco-x-demo.spec.ts",
   ],
   // Serialize tests: greentic-start does not expose --port and binds the runner
   // to default 8080, so two concurrent demos would collide. Tests are short
