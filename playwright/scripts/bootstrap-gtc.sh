@@ -55,14 +55,25 @@ run_gtc_install() {
   "$bin" install --force --release "$GTC_RELEASE"
 }
 
-# Workaround for greentic-repo bug: when invoked as `gtc-dev`, the gtc
-# binary rewrites companion binary names to a `-dev` suffix (see
-# `companion_binary_for_invocation` in greentic/src/bin/gtc/process.rs).
-# But `gtc install` installs companions with their canonical names
-# (`greentic-deployer`, not `greentic-deployer-dev`), so the post-install
-# `ensure_deployer_dist_pack` step fails with ENOENT when it tries to
-# spawn `greentic-deployer-dev`. Symlink the canonical names to
-# `<name>-dev` so the dev gtc resolves them. Stable is unaffected.
+# Companion-binary symlinking for the dev channel.
+#
+# Two scenarios are handled, depending on what `gtc-dev install` actually
+# put on disk:
+#
+# 1. Legacy (pre binary-bifurcation): `gtc install` placed companions under
+#    their canonical names (`greentic-deployer`, etc.), but `gtc-dev`'s
+#    `companion_binary_for_invocation` looks them up with a `-dev` suffix.
+#    Fix: symlink `<name>-dev → <name>`.
+#
+# 2. Post binary-bifurcation (dev lane on crates.io, ~2026-04-24): `gtc-dev
+#    install` installs `<name>-dev` directly (e.g., `greentic-secrets-dev`)
+#    and no canonical-name binary exists. But the Playwright fixtures spawn
+#    canonical names (`greentic-secrets`, `greentic-start`) — see
+#    playwright/tests/_fixtures/gtc-demo.ts.
+#    Fix: symlink `<name> → <name>-dev`.
+#
+# Stable is unaffected — `gtc install --release` puts canonical names on
+# disk and Playwright's spawn calls resolve them directly.
 link_dev_companions() {
   local bin_dir="$HOME/.cargo/bin"
   local companions=(
@@ -83,6 +94,9 @@ link_dev_companions() {
   for name in "${companions[@]}"; do
     if [[ -x "$bin_dir/$name" && ! -e "$bin_dir/$name-dev" ]]; then
       ln -s "$bin_dir/$name" "$bin_dir/$name-dev"
+    fi
+    if [[ -x "$bin_dir/$name-dev" && ! -e "$bin_dir/$name" ]]; then
+      ln -s "$bin_dir/$name-dev" "$bin_dir/$name"
     fi
   done
 }

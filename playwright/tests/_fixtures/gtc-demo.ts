@@ -59,7 +59,9 @@ function substituteEnvPlaceholders<T>(value: T): T {
   }
   if (typeof value === "object" && value !== null) {
     const out: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, entry] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
       out[key] = substituteEnvPlaceholders(entry);
     }
     return out as T;
@@ -102,9 +104,16 @@ async function ensureBundleExtracted(
 
   const createAnswersPath = await ensureAsset(
     demoAssetNames(demoName).createAnswers,
-    { tag: releaseTag, cacheDir: join(REPO_TMP_BASE, "demo-assets", releaseTag) },
+    {
+      tag: releaseTag,
+      cacheDir: join(REPO_TMP_BASE, "demo-assets", releaseTag),
+    },
   );
-  await runOrThrow(GTC_BIN, ["wizard", "--answers", createAnswersPath], cacheDir);
+  await runOrThrow(
+    GTC_BIN,
+    ["wizard", "--answers", createAnswersPath],
+    cacheDir,
+  );
 
   const found = findExisting();
   if (!found) {
@@ -121,10 +130,10 @@ async function downloadSetupAnswers(
   demoName: string,
   releaseTag: string,
 ): Promise<string> {
-  return ensureAsset(
-    demoAssetNames(demoName).setupAnswers,
-    { tag: releaseTag, cacheDir: join(REPO_TMP_BASE, "demo-assets", releaseTag) },
-  );
+  return ensureAsset(demoAssetNames(demoName).setupAnswers, {
+    tag: releaseTag,
+    cacheDir: join(REPO_TMP_BASE, "demo-assets", releaseTag),
+  });
 }
 
 async function runOrThrow(
@@ -150,7 +159,9 @@ async function runOrThrow(
       // Kill the PTY wrapper AND its grandchild — `script -q /dev/null cmd`
       // on macOS won't always exit when its child does, leaving zombie
       // gtc setups that block subsequent runs.
-      try { p.kill("SIGKILL"); } catch {}
+      try {
+        p.kill("SIGKILL");
+      } catch {}
       reject(
         new Error(
           `${cmd} ${args.join(" ")} timed out after ${timeoutMs}ms\nstdout:\n${stdout}\nstderr:\n${stderr}`,
@@ -160,7 +171,12 @@ async function runOrThrow(
     p.on("exit", (code) => {
       clearTimeout(timer);
       if (code === 0) resolve();
-      else reject(new Error(`${cmd} ${args.join(" ")} exited ${code}\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+      else
+        reject(
+          new Error(
+            `${cmd} ${args.join(" ")} exited ${code}\nstdout:\n${stdout}\nstderr:\n${stderr}`,
+          ),
+        );
     });
     p.on("error", (err) => {
       clearTimeout(timer);
@@ -169,7 +185,10 @@ async function runOrThrow(
   });
 }
 
-function wrapWithPty(cmd: string, args: string[]): { cmd: string; args: string[] } {
+function wrapWithPty(
+  cmd: string,
+  args: string[],
+): { cmd: string; args: string[] } {
   if (process.platform === "darwin") {
     return { cmd: "script", args: ["-q", "/dev/null", cmd, ...args] };
   }
@@ -195,7 +214,14 @@ async function gtcSetup(
   // --no-ui:          skip the web UI launch.
   await runOrThrow(
     GTC_BIN,
-    ["setup", "--non-interactive", "--no-ui", bundleDir, "--answers", setupAnswersPath],
+    [
+      "setup",
+      "--non-interactive",
+      "--no-ui",
+      bundleDir,
+      "--answers",
+      setupAnswersPath,
+    ],
     bundleDir,
     envOverrides,
   );
@@ -231,14 +257,22 @@ async function seedSetupAnswerSecrets(
       await runOrThrow(
         "greentic-secrets",
         [
-          "admin", "set",
-          "--env", "dev",
-          "--tenant", team,
-          "--store-path", storePath,
-          "--visibility", "team",
-          "--category", category,
-          "--name", name,
-          "--value", value,
+          "admin",
+          "set",
+          "--env",
+          "dev",
+          "--tenant",
+          team,
+          "--store-path",
+          storePath,
+          "--visibility",
+          "team",
+          "--category",
+          category,
+          "--name",
+          name,
+          "--value",
+          value,
         ],
         bundleDir,
       );
@@ -271,8 +305,9 @@ async function applyAnswersPatch(
     demoName === "deep-research-demo" &&
     !process.env.OPENAI_API_KEY?.trim()
   ) {
-    const patchSetupAnswers = (patch as { setup_answers?: Record<string, unknown> })
-      .setup_answers;
+    const patchSetupAnswers = (
+      patch as { setup_answers?: Record<string, unknown> }
+    ).setup_answers;
     if (patchSetupAnswers && "deep-research-demo" in patchSetupAnswers) {
       delete patchSetupAnswers["deep-research-demo"];
     }
@@ -285,26 +320,46 @@ async function applyAnswersPatch(
   // back to a stdin selector ("Cloudflare / ngrok / No tunnel") that never
   // gets a keystroke under Playwright. Force "no tunnel" for all demos.
   // Keep an existing answer if the demo overlay sets one explicitly.
-  const platformSetup = ((merged as { platform_setup?: Record<string, unknown> }).platform_setup ??= {});
+  const platformSetup = ((
+    merged as { platform_setup?: Record<string, unknown> }
+  ).platform_setup ??= {});
   if (platformSetup.tunnel == null) {
     platformSetup.tunnel = { kind: "none" };
   }
+  // gtc 1.0.20+ rejects setup with `bundle contains deployer packs ... but
+  // answers did not define platform_setup.deployment_targets` when the
+  // bundle ships any deployer pack (e.g. deep-research-demo's create-answers
+  // pulls in `greentic.deploy.aws:stable`) and the upstream non-cloud
+  // setup-answers ship `deployment_targets: []`. Inject a "runtime" target
+  // so setup proceeds with local-only deployment. Mirrors the AWS variant
+  // answers (deep-research-demo-aws-setup-answers.json) which list
+  // "runtime" as the first target.
+  if (
+    !Array.isArray(platformSetup.deployment_targets) ||
+    (platformSetup.deployment_targets as unknown[]).length === 0
+  ) {
+    platformSetup.deployment_targets = [{ target: "runtime" }];
+  }
   if (demoName === "weather-mcp-demo") {
     const weatherApiKey = process.env.WEATHER_API_KEY?.trim();
-    const setupAnswers =
-      ((merged as { setup_answers?: Record<string, unknown> }).setup_answers ??= {});
-    const weather =
-      ((setupAnswers["weatherapi-pack"] as Record<string, unknown> | undefined) ??= {});
+    const setupAnswers = ((
+      merged as { setup_answers?: Record<string, unknown> }
+    ).setup_answers ??= {});
+    const weather = ((setupAnswers["weatherapi-pack"] as
+      | Record<string, unknown>
+      | undefined) ??= {});
     if (weatherApiKey) {
       weather["auth_param_get_weather_key"] = weatherApiKey;
       weather["auth_param_get_forecast_weather_key"] = weatherApiKey;
     }
   }
   if (demoName === "deep-research-demo") {
-    const setupAnswers =
-      ((merged as { setup_answers?: Record<string, unknown> }).setup_answers ??= {});
-    const deepResearch =
-      ((setupAnswers["deep-research-demo"] as Record<string, unknown> | undefined) ??= {});
+    const setupAnswers = ((
+      merged as { setup_answers?: Record<string, unknown> }
+    ).setup_answers ??= {});
+    const deepResearch = ((setupAnswers["deep-research-demo"] as
+      | Record<string, unknown>
+      | undefined) ??= {});
     const provider = deepResearch["provider"];
     const model = deepResearch["model"];
     const url = deepResearch["url"];
@@ -342,7 +397,9 @@ function rewriteLocalhostPort<T>(value: T, port: number): T {
   }
   if (typeof value === "object" && value !== null) {
     const out: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, entry] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
       out[key] = rewriteLocalhostPort(entry, port);
     }
     return out as T;
@@ -412,7 +469,9 @@ function tailLog(logFile: string, lines = 100): void {
   try {
     const content = readFileSync(logFile, "utf8");
     const tail = content.split("\n").slice(-lines).join("\n");
-    console.log(`\n=== gtc log (last ${lines} lines): ${logFile} ===\n${tail}\n=== end gtc log ===`);
+    console.log(
+      `\n=== gtc log (last ${lines} lines): ${logFile} ===\n${tail}\n=== end gtc log ===`,
+    );
   } catch {
     console.log(`[gtc-demo] log not readable: ${logFile}`);
   }
@@ -431,7 +490,9 @@ async function gtcStart(
   // Trade-off: greentic-start does not expose a --port flag (only
   // --admin-port), so the runner binds to its default 8080. Tests run with
   // workers: 1 (serialized) to avoid port collision.
-  await mkdir(join(bundleDir, "..", "logs"), { recursive: true }).catch(() => {});
+  await mkdir(join(bundleDir, "..", "logs"), { recursive: true }).catch(
+    () => {},
+  );
   const logStream = createWriteStream(logFile, { flags: "w" });
   const noOpenShimDir = await ensureNoOpenShim();
   const startEnv: Record<string, string> = {
@@ -446,9 +507,12 @@ async function gtcStart(
     "greentic-start",
     [
       "start",
-      "--config", join(bundleDir, "bundle.yaml"),
-      "--cloudflared", "off",
-      "--ngrok", "off",
+      "--config",
+      join(bundleDir, "bundle.yaml"),
+      "--cloudflared",
+      "off",
+      "--ngrok",
+      "off",
       "--no-browser",
       "--quiet",
     ],
@@ -488,7 +552,9 @@ async function waitForReady(
     }
     await sleep(500);
   }
-  throw new Error(`/readyz not ready after ${timeoutMs}ms (last: ${String(lastErr)})`);
+  throw new Error(
+    `/readyz not ready after ${timeoutMs}ms (last: ${String(lastErr)})`,
+  );
 }
 
 async function stopGtc(proc: ChildProcess): Promise<void> {
@@ -521,7 +587,8 @@ export const test = base.extend<{
       if (opts.name === "weather-mcp-demo") {
         const isCI = !!process.env.GITHUB_ACTIONS;
         if (!process.env.WEATHER_API_KEY?.trim()) {
-          const message = "WEATHER_API_KEY env var not set (required for weather API calls)";
+          const message =
+            "WEATHER_API_KEY env var not set (required for weather API calls)";
           if (isCI) {
             throw new Error(`[CI] ${message}`);
           } else {
@@ -534,12 +601,23 @@ export const test = base.extend<{
       const port = await findFreePort();
       const releaseTag = opts.releaseTag ?? "latest";
 
-      const bundleDir = await ensureBundleExtracted(opts.name, testInfo.workerIndex, releaseTag);
+      const bundleDir = await ensureBundleExtracted(
+        opts.name,
+        testInfo.workerIndex,
+        releaseTag,
+      );
 
       let setupAnswersPath: string;
       if (opts.setupAnswers) {
-        setupAnswersPath = join(bundleDir, "..", `setup-answers-override-${opts.name}.json`);
-        await writeFile(setupAnswersPath, JSON.stringify(opts.setupAnswers, null, 2));
+        setupAnswersPath = join(
+          bundleDir,
+          "..",
+          `setup-answers-override-${opts.name}.json`,
+        );
+        await writeFile(
+          setupAnswersPath,
+          JSON.stringify(opts.setupAnswers, null, 2),
+        );
       } else {
         const upstreamPath = await downloadSetupAnswers(opts.name, releaseTag);
         setupAnswersPath = await applyAnswersPatch(
@@ -558,7 +636,11 @@ export const test = base.extend<{
       // Weather and webchat demos both resolve auth through this store.
       await seedSetupAnswerSecrets(bundleDir, setupAnswersPath, team);
 
-      const logFile = join(bundleDir, "..", `gtc-${opts.name}-w${testInfo.workerIndex}.log`);
+      const logFile = join(
+        bundleDir,
+        "..",
+        `gtc-${opts.name}-w${testInfo.workerIndex}.log`,
+      );
       console.log(`[gtc-demo] log → ${logFile}`);
       const proc = await gtcStart(bundleDir, logFile, port, opts.envOverrides);
 
