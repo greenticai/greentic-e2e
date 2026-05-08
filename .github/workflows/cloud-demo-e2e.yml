@@ -42,6 +42,7 @@ jobs:
       AWS_REGION: ${{ secrets.AWS_REGION || 'eu-north-1' }}
       AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION || 'eu-north-1' }}
       GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND: ${{ secrets.GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND || 's3' }}
+      GREENTIC_DEPLOY_TERRAFORM_VAR_TENANT: demo
 
     steps:
       - uses: actions/checkout@v4
