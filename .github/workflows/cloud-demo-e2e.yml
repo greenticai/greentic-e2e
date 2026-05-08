@@ -90,6 +90,9 @@ jobs:
           terraform_version: 1.6.6
           terraform_wrapper: false
 
+      - name: Set up oras
+        uses: oras-project/setup-oras@v1
+
       - name: Run AWS cloud demo E2E
         shell: bash
         env:
