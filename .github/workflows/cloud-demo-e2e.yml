@@ -84,6 +84,12 @@ jobs:
           fi
           gtc --version
           gtc install
+          # gtc:stable manifest pins greentic-deployer 0.4.52, which is missing
+          # the tenant tfvars + module-input fix (landed in 0.4.55, commit ca60682).
+          # Override with 0.4.59 — last 0.4.x release, includes the fix, smallest
+          # delta from the manifest pin. Drop this once gtc:stable is bumped.
+          cargo binstall -y --force greentic-deployer@0.4.59
+          greentic-deployer --version
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3
