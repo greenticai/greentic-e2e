@@ -25,6 +25,9 @@
 #   GREENTIC_DEPLOY_TERRAFORM_VAR_GCP_PROJECT_ID
 #   GREENTIC_DEPLOY_TERRAFORM_VAR_GCP_REGION (optional, default: us-central1)
 #
+# Required tools on PATH:
+#   gtc, terraform (for cloud targets), oras (to fetch the deployer provider pack)
+#
 # Optional env:
 #   GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND (default: s3)
 #   AWS_REGION (default: eu-north-1)
@@ -375,6 +378,30 @@ curl -fsSL "${CREATE_ANSWERS_URL}" -o "${LOCAL_CREATE_ANSWERS}"
 log ""
 log "Step 2: setup"
 "${GTC_CMD}" setup --non-interactive ./cloud-deploy-demo-bundle --answers "${SETUP_ANSWERS_URL}"
+
+log ""
+log "Step 2b: stage deployer pack for ${TARGET}"
+# `gtc start --target <cloud>` looks for the deployer provider pack under the
+# bundle, in `.greentic/deployment-targets.json` metadata, or adjacent to the
+# `greentic-deployer` binary at `<bin-dir>/dist/`. The cloud demo bundle from
+# greentic-demo doesn't ship one, the cargo-binstall'd deployer release
+# tarball doesn't include `dist/`, and `gtc install` doesn't hydrate it. Pull
+# the canonical pack from GHCR and drop it into the bundle layout fallback.
+command -v oras >/dev/null 2>&1 || die "oras not found on PATH (install via oras-project/setup-oras@v1 or https://oras.land/cli)"
+DEPLOYER_PACK_REF="ghcr.io/greenticai/packs/deployer/greentic.deploy.${TARGET}:stable"
+DEPLOYER_DIR="${WORK_DIR}/cloud-deploy-demo-bundle/providers/deployer"
+DEPLOYER_PULL_DIR="${WORK_DIR}/.greentic/deployer-pull"
+mkdir -p "${DEPLOYER_DIR}" "${DEPLOYER_PULL_DIR}"
+log_verbose "pulling ${DEPLOYER_PACK_REF}"
+(
+  cd "${DEPLOYER_PULL_DIR}"
+  rm -rf dist
+  oras pull "${DEPLOYER_PACK_REF}" >/dev/null
+)
+DEPLOYER_PACK_SRC="${DEPLOYER_PULL_DIR}/dist/${TARGET}.gtpack"
+[[ -f "${DEPLOYER_PACK_SRC}" ]] || die "deployer pack not pulled to ${DEPLOYER_PACK_SRC}"
+mv "${DEPLOYER_PACK_SRC}" "${DEPLOYER_DIR}/${TARGET}.gtpack"
+log "Staged ${DEPLOYER_DIR}/${TARGET}.gtpack from ${DEPLOYER_PACK_REF}"
 
 log ""
 log "Step 3: start ${TARGET} deploy"
