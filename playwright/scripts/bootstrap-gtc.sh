@@ -10,7 +10,7 @@
 set -euo pipefail
 
 channel="${1:?usage: bootstrap-gtc.sh stable|dev|both}"
-GTC_RELEASE="${GTC_RELEASE:-1.0.17}"
+GTC_RELEASE="${GTC_RELEASE:-1.0.18}"
 
 ensure_rust() {
   if ! command -v cargo >/dev/null 2>&1; then
