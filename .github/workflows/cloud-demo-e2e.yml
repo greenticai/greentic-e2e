@@ -112,4 +112,5 @@ jobs:
         with:
           name: cloud-demo-e2e-logs
           path: ${{ runner.temp }}/cloud-demo-e2e
+          include-hidden-files: true
           if-no-files-found: ignore
