@@ -84,11 +84,13 @@ jobs:
           fi
           gtc --version
           gtc install
-          # gtc:stable manifest pins greentic-deployer 0.4.52, which is missing
-          # the tenant tfvars + module-input fix (landed in 0.4.55, commit ca60682).
-          # Override with 0.4.59 — last 0.4.x release, includes the fix, smallest
-          # delta from the manifest pin. Drop this once gtc:stable is bumped.
-          cargo binstall -y --force greentic-deployer@0.4.59
+          # gtc:stable (v1.0.23+) now passes `--bundle-root` to `greentic-deployer
+          # <target> apply`, which only landed in greentic-deployer 0.5.11. The
+          # gtc:stable toolchain manifest still pins an older 0.4.x deployer, so
+          # without this override the apply step fails with
+          # "error: unexpected argument '--bundle-root' found".
+          # Drop this once gtc:stable is bumped to a deployer ≥ 0.5.11.
+          cargo binstall -y --force greentic-deployer@0.5.11
           greentic-deployer --version
 
       - name: Set up Terraform
