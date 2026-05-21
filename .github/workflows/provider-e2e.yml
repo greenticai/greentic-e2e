@@ -91,7 +91,7 @@ jobs:
             cargo binstall -y "gtc@${GTC_VERSION}"
           fi
           gtc --version
-          gtc install
+          gtc install --channel stable
 
       - name: Prepare test workspace
         shell: bash
@@ -334,7 +334,7 @@ jobs:
           source "$HOME/.cargo/env"
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y gtc
-          gtc install
+          gtc install --channel stable
 
       - name: Prepare and start services
         if: steps.secrets.outputs.present == 'true'
@@ -558,7 +558,7 @@ jobs:
           source "$HOME/.cargo/env"
           curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
           cargo binstall -y gtc
-          gtc install
+          gtc install --channel stable
 
       - name: Prepare and start services
         if: steps.secrets.outputs.present == 'true'
