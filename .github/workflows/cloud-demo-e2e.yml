@@ -83,7 +83,7 @@ jobs:
             cargo binstall -y "gtc@${GTC_VERSION}"
           fi
           gtc --version
-          gtc install
+          gtc install --channel stable
           # gtc:stable (v1.0.23+) now passes `--bundle-root` to `greentic-deployer
           # <target> apply`, which only landed in greentic-deployer 0.5.11. The
           # gtc:stable toolchain manifest still pins an older 0.4.x deployer, so
