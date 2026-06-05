@@ -1,0 +1,78 @@
+name: Store Dual-Publish E2E
+
+# Exercises the greentic-store-server agentic-worker lifecycle end-to-end
+# (publish -> install -> run) against REAL infrastructure: docker network +
+# Postgres + MinIO + the store image, with the designer side simulated via
+# curl. Verifies the publish/list/detail/artifact/run API contracts plus the
+# install-back byte-equality invariant and the run-from-store admin hand-off.
+#
+# The store image is pulled from GHCR. If the pull fails (private image), the
+# scenario SKIPS (exit 0) with a clear message rather than failing -- so a
+# missing pull token never reds the nightly. No repo secrets are required;
+# docker is available on the runner.
+
+on:
+  schedule:
+    # 01:30 UTC -- after webchat-passthrough (01:00), before cloud-demo (02:00).
+    - cron: "30 1 * * *"
+  workflow_dispatch:
+    inputs:
+      store_image:
+        description: "Store-server image (default: GHCR :latest)"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  store-dual-publish:
+    name: Store dual-publish lifecycle
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          # zip: builds the worker .gtpack; curl/python3 drive the asserts.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq zip curl python3
+
+      - name: Run store dual-publish e2e
+        shell: bash
+        env:
+          STORE_IMAGE: ${{ github.event.inputs.store_image }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${STORE_IMAGE}" ]]; then
+            export STORE_IMAGE
+          fi
+          bash scripts/run_store_dual_publish_e2e.sh
+
+      - name: Stage diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p ./diagnostics
+          docker ps -a > ./diagnostics/docker-ps.txt 2>&1 || true
+          for c in $(docker ps -a --format '{{.Names}}' | grep '^gtc-store-e2e-' || true); do
+            docker logs "$c" > "./diagnostics/${c}.log" 2>&1 || true
+          done
+          find ./diagnostics -type f | head
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: store-dual-publish-diagnostics
+          path: ./diagnostics
+          if-no-files-found: warn
+          retention-days: 7
