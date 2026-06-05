@@ -15,12 +15,22 @@ This repository automates the validation of `gtc` installation and initializatio
 4.  **Artifact Verification**: Checks if libraries, commercial components, and documentation are correctly placed in the `~/.greentic` directory.
 5.  **Provider Lifecycle**: Verifies `wizard -> setup -> start -> ingress -> stop` for provider bundles.
 6.  **Cloud Demo Lifecycle**: Work in progress harness for `wizard -> setup --no-ui -> start --target <aws|azure|gcp> -> web UI -> optional admin tunnel -> stop --destroy`.
+7.  **Store Dual-Publish Lifecycle**: Drives the greentic-store-server agentic-worker contract `publish -> install -> run` against a real Postgres + MinIO + store container, with the designer side simulated via curl.
 
 ## Local Scripts
 
 Provider lifecycle:
 ```bash
 ./scripts/run_provider_e2e.sh
+```
+
+Store dual-publish lifecycle (requires docker; no credentials):
+```bash
+# Pulls ghcr.io/greentic-biz/greentic-store-server:latest by default.
+# SKIPS (exit 0) if the image is not pullable. Point STORE_IMAGE at a
+# locally-built tag to run against a private build.
+./scripts/run_store_dual_publish_e2e.sh
+STORE_IMAGE=greentic-store-server:dev ./scripts/run_store_dual_publish_e2e.sh
 ```
 
 AWS cloud demo lifecycle:
@@ -71,6 +81,7 @@ GitHub Actions:
 - `Nightly e2e gtc install/wizard`
 - `Provider E2E Tests`
 - `Cloud Demo E2E` for the AWS demo lifecycle
+- `Store Dual-Publish E2E` for the store agentic-worker publish/install/run lifecycle
 
 Notes:
 - `Cloud Demo E2E` runs web UI validation by default.
