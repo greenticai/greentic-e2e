@@ -345,8 +345,9 @@ done
 [[ "$PG_READY" == "true" ]] || die "Postgres did not become ready"
 pass "Postgres ready"
 
-# Wait for MinIO, then create the bucket and grant anonymous download
-# (the store fetches artifacts back from blob storage during run).
+# Wait for MinIO, then create the bucket. The store reads artifacts back via
+# the authenticated S3 SDK (BLOB_ACCESS_KEY/BLOB_SECRET_KEY), so no anonymous
+# access policy is needed on the bucket.
 MINIO_READY=false
 for _ in $(seq 1 30); do
   if curl -s -o /dev/null "http://127.0.0.1:${MINIO_PORT}/minio/health/live" 2>/dev/null; then
@@ -359,8 +360,7 @@ done
 
 docker run --rm --network "${NET_NAME}" --entrypoint /bin/sh "${MC_IMAGE}" -c "
   mc alias set local http://${MINIO_NAME}:9000 ${BLOB_ACCESS_KEY} ${BLOB_SECRET_KEY} &&
-  mc mb --ignore-existing local/${BLOB_BUCKET} &&
-  mc anonymous set download local/${BLOB_BUCKET}
+  mc mb --ignore-existing local/${BLOB_BUCKET}
 " >/dev/null 2>&1 || die "failed to create MinIO bucket"
 pass "MinIO ready + bucket '${BLOB_BUCKET}' created"
 

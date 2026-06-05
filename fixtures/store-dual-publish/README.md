@@ -19,16 +19,54 @@ needs no cargo/network.
 
 Regenerate (only when the `PackManifest` CBOR shape changes upstream):
 
-```rust
-// throwaway cargo bin depending on a local greentic-types checkout
-let mut m = greentic_types::PackManifest { /* min fields */, agents: BTreeMap::new(), .. };
-m.agents.insert("triage".into(), serde_json::json!({
-    "agent_id":"triage","system_prompt":"be helpful","tools":[],
-    "llm":{"provider":"openai","model":"gpt-4o-mini"}
-}));
-let cbor = greentic_types::encode_pack_manifest(&m).unwrap();
-std::fs::write("manifest.cbor", &cbor).unwrap();
+```toml
+# throwaway cargo bin's Cargo.toml — pin to the dev line this fixture targets
+[dependencies]
+greentic-types = ">=1.1.0-dev, <1.2.0-0"
+semver = "1"
+serde_json = "1"
 ```
+
+```rust
+// src/main.rs — mirrors min_manifest() in greentic-store-server's
+// crates/greentic-store-api tests (build_run_gtpack).
+use std::collections::BTreeMap;
+
+fn main() {
+    let mut manifest = greentic_types::PackManifest {
+        schema_version: "1".into(),
+        pack_id: greentic_types::PackId::new("test.pack").unwrap(),
+        name: None,
+        version: semver::Version::new(0, 1, 0),
+        kind: greentic_types::PackKind::Application,
+        publisher: "test".into(),
+        components: Vec::new(),
+        flows: Vec::new(),
+        dependencies: Vec::new(),
+        capabilities: Vec::new(),
+        secret_requirements: Vec::new(),
+        signatures: greentic_types::PackSignatures::default(),
+        bootstrap: None,
+        extensions: None,
+        agents: BTreeMap::new(),
+    };
+    manifest.agents.insert(
+        "triage".into(),
+        serde_json::json!({
+            "agent_id": "triage",
+            "system_prompt": "be helpful",
+            "tools": [],
+            "llm": { "provider": "openai", "model": "gpt-4o-mini" }
+        }),
+    );
+    let cbor = greentic_types::encode_pack_manifest(&manifest).unwrap();
+    std::fs::write("manifest.cbor", &cbor).unwrap();
+}
+```
+
+The symbol-table encoder rewrites `pack_id` from the `"test.pack"` string into a
+numeric symbol index (`pack_id: 0`, with the string interned under
+`symbols.pack_ids`), which is why the decoded fixture shows an integer there.
 
 This mirrors `min_manifest()` in
 `greentic-store-server/crates/greentic-store-api/src/handlers/agentic_workers/run.rs`
