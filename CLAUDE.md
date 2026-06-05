@@ -9,6 +9,7 @@ End-to-end tests for the Greentic CLI (`gtc`). Two test suites run nightly via G
 1. **Nightly Install/Wizard** (`nightly-e2e.yml`, 00:00 UTC) - Tests `gtc install`, `gtc doctor`, and `gtc wizard` across 6 platform/arch combos (Linux x64/arm64, macOS arm64/x64, Windows x64/arm64). Uses `expect` scripts for interactive wizard testing.
 2. **Provider E2E** (`provider-e2e.yml`, 00:30 UTC) - Full provider lifecycle: bundle creation, setup, start, HTTP ingress verification, and shutdown. Tests all messaging and event providers.
 3. **Cloud Demo E2E** (`cloud-demo-e2e.yml`, 02:00 UTC) - Cloud demo lifecycle: `gtc wizard`, `gtc setup --non-interactive`, `gtc start --target <aws|azure|gcp>`, web UI verification, optional admin tunnel verification, and `gtc stop --destroy`.
+4. **Telemetry E2E** (`telemetry-e2e.yml`, 01:00 UTC) - Boots a file-export OpenTelemetry Collector, starts a dummy-provider bundle with `TELEMETRY_EXPORT`/`OTLP_ENDPOINT` pointed at it, drives traffic, and asserts the collector's JSON dump contains OTLP **logs** for the configured `service.name`. Requires Docker.
 
 ## Running Tests
 
@@ -168,6 +169,7 @@ Full list of all secret env vars is in `.secrets-provider.example`.
 - `scripts/run_provider_e2e.sh` - Main local test runner. Uses Perl for cross-platform timeout handling. Cleanup trap kills `greentic-runner` and `nats-server` processes.
 - `scripts/run_cloud_demo_e2e.sh` - Cloud demo lifecycle harness for AWS, Azure, and GCP. Verifies published `greentic-demo` release assets, web UI route, and optional admin tunnel flow for AWS only.
   Defaults: AWS `AWS_REGION/AWS_DEFAULT_REGION=eu-north-1`, AWS backend `s3`, Azure location `westeurope`, Azure backend `azurerm`, GCP region `us-central1`, GCP backend `gcs`.
+- `scripts/run_telemetry_e2e.sh` - Telemetry OTLP harness. Boots `fixtures/telemetry/otel-collector-file-export.yaml` in Docker, starts a dummy bundle with `TELEMETRY_EXPORT`/`OTLP_ENDPOINT`, asserts `resourceLogs` + `service.name` in the dump. Collector publishes on host `:14317`/`:14318` and the gateway on `:18080` to avoid colliding with a local demo/collector. Cleanup is scoped to the run's own `greentic-start` (matched by temp dir), so it won't kill an unrelated demo server.
 - `ci/run_actions.sh` - Runs nightly workflow locally via [nektos/act](https://github.com/nektos/act). Auto-installs `act` to `.bin/`. Resolves Docker host for both macOS (Docker Desktop) and Linux.
 
 ## Playwright sub-package
