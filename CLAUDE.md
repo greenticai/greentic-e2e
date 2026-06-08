@@ -10,6 +10,8 @@ End-to-end tests for the Greentic CLI (`gtc`). Two test suites run nightly via G
 2. **Provider E2E** (`provider-e2e.yml`, 00:30 UTC) - Full provider lifecycle: bundle creation, setup, start, HTTP ingress verification, and shutdown. Tests all messaging and event providers.
 3. **Cloud Demo E2E** (`cloud-demo-e2e.yml`, 02:00 UTC) - Cloud demo lifecycle: `gtc wizard`, `gtc setup --non-interactive`, `gtc start --target <aws|azure|gcp>`, web UI verification, optional admin tunnel verification, and `gtc stop --destroy`.
 4. **Store Dual-Publish E2E** (`store-dual-publish-e2e.yml`, 01:30 UTC) - Store agentic-worker lifecycle `publish -> install -> run` against real Postgres + MinIO + the store container. Designer side is simulated via curl; verifies the publish/list/detail/artifact/run API contracts, the install-back byte-equality invariant, and the run-from-store admin hand-off. SKIPS (not fails) when the GHCR store image is not pullable.
+5. **Telemetry E2E** (`telemetry-e2e.yml`, 01:00 UTC) - Boots a file-export OpenTelemetry Collector, starts a dummy-provider bundle with `TELEMETRY_EXPORT`/`OTLP_ENDPOINT` pointed at it, drives traffic, and asserts the collector's JSON dump contains OTLP **logs** for the configured `service.name`. Requires Docker.
+
 
 ## Running Tests
 
@@ -169,6 +171,7 @@ Full list of all secret env vars is in `.secrets-provider.example`.
 - `scripts/run_provider_e2e.sh` - Main local test runner. Uses Perl for cross-platform timeout handling. Cleanup trap kills `greentic-runner` and `nats-server` processes.
 - `scripts/run_cloud_demo_e2e.sh` - Cloud demo lifecycle harness for AWS, Azure, and GCP. Verifies published `greentic-demo` release assets, web UI route, and optional admin tunnel flow for AWS only.
   Defaults: AWS `AWS_REGION/AWS_DEFAULT_REGION=eu-north-1`, AWS backend `s3`, Azure location `westeurope`, Azure backend `azurerm`, GCP region `us-central1`, GCP backend `gcs`.
+- `scripts/run_telemetry_e2e.sh` - Telemetry OTLP harness. Boots `fixtures/telemetry/otel-collector-file-export.yaml` in Docker, starts a dummy bundle with `TELEMETRY_EXPORT`/`OTLP_ENDPOINT`, asserts `resourceLogs` + `service.name` in the dump. Collector publishes on host `:14317`/`:14318` and the gateway on `:18080` to avoid colliding with a local demo/collector. Cleanup is scoped to the run's own `greentic-start` (matched by temp dir), so it won't kill an unrelated demo server.
 - `scripts/run_store_dual_publish_e2e.sh` - Store agentic-worker `publish -> install -> run` lifecycle. Spins up a throwaway docker network + Postgres + MinIO + the store image, plus a python3-stdlib mock admin registry (reachable via container DNS name on the shared docker network). Asserts the publish no-repack sha invariant, install-back byte-equality, run-from-store admin hand-off (one PUT, namespaced agent id), and the byo-required 409. Vendors a pre-built `fixtures/store-dual-publish/manifest.cbor` (the run endpoint decodes it with greentic-types; see that fixture's generation note below). SKIPS when the store image is not pullable.
 - `ci/run_actions.sh` - Runs nightly workflow locally via [nektos/act](https://github.com/nektos/act). Auto-installs `act` to `.bin/`. Resolves Docker host for both macOS (Docker Desktop) and Linux.
 

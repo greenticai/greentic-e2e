@@ -1,0 +1,44 @@
+# Minimal OpenTelemetry Collector config for telemetry E2E.
+#
+# Receives OTLP (gRPC :4317 / HTTP :4318) from greentic-start/greentic-runner and
+# writes every signal to a single JSON dump file, so the harness can assert
+# deterministically that logs/metrics/traces actually reached the endpoint —
+# no Prometheus/Loki/Grafana needed.
+#
+# The `file` exporter writes one OTLP-JSON object per batch to
+# /etc/otelcol/out/otlp-dump.json (bind-mounted to the host work dir). The
+# `debug` exporter mirrors to stdout (`docker logs`) for troubleshooting.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 256
+
+exporters:
+  file:
+    path: /etc/otelcol/out/otlp-dump.json
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [file, debug]
+    traces:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [file, debug]
+    metrics:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [file, debug]
