@@ -1,1 +1,10 @@
-{ "setup_answers": {} }
+{
+  "platform_setup": {
+    "static_routes": {
+      "public_surface_policy": "enabled",
+      "public_web_enabled": true,
+      "public_base_url": "http://127.0.0.1:8080"
+    }
+  },
+  "setup_answers": {}
+}

@@ -36,6 +36,40 @@ interface RunningDemo extends GtcDemo {
 
 const GTC_BIN = process.env.GTC_BIN ?? "gtc";
 const REPO_TMP_BASE = join(process.cwd(), "tmp");
+// Some demos (e.g. pet-daycare-demo, the fast2flow showcase) ship their
+// create/setup answers in the greentic-demo repo but are NOT published as
+// `releases/latest/download/*` assets, so a release download 404s. For those
+// we vendor the answer JSON here and prefer it over the release download. The
+// referenced OCI packs ARE published, so `gtc wizard` still builds the bundle.
+const VENDORED_ANSWERS_DIR = join(
+  process.cwd(),
+  "tests",
+  "_fixtures",
+  "demo-answers",
+);
+
+/** Path to a vendored answers JSON if present, else null. */
+function vendoredAnswersPath(filename: string): string | null {
+  const p = join(VENDORED_ANSWERS_DIR, filename);
+  return existsSync(p) ? p : null;
+}
+
+/**
+ * Resolve a demo answers asset: prefer the vendored copy (for demos not
+ * published to greentic-demo releases), else download from the release.
+ */
+async function resolveAnswersAsset(
+  filename: string,
+  releaseTag: string,
+): Promise<string> {
+  return (
+    vendoredAnswersPath(filename) ??
+    (await ensureAsset(filename, {
+      tag: releaseTag,
+      cacheDir: join(REPO_TMP_BASE, "demo-assets", releaseTag),
+    }))
+  );
+}
 
 function maskSecret(s: string): string {
   if (s.length <= 8) return "****";
@@ -102,12 +136,9 @@ async function ensureBundleExtracted(
 
   await mkdir(cacheDir, { recursive: true });
 
-  const createAnswersPath = await ensureAsset(
+  const createAnswersPath = await resolveAnswersAsset(
     demoAssetNames(demoName).createAnswers,
-    {
-      tag: releaseTag,
-      cacheDir: join(REPO_TMP_BASE, "demo-assets", releaseTag),
-    },
+    releaseTag,
   );
   await runOrThrow(
     GTC_BIN,
@@ -130,10 +161,7 @@ async function downloadSetupAnswers(
   demoName: string,
   releaseTag: string,
 ): Promise<string> {
-  return ensureAsset(demoAssetNames(demoName).setupAnswers, {
-    tag: releaseTag,
-    cacheDir: join(REPO_TMP_BASE, "demo-assets", releaseTag),
-  });
+  return resolveAnswersAsset(demoAssetNames(demoName).setupAnswers, releaseTag);
 }
 
 async function runOrThrow(
