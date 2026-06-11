@@ -18,6 +18,36 @@ const ERROR_MARKERS = /error|exception|panic|stack trace/i;
 
 const demoOpts = { name: "pet-daycare-demo", envOverrides: FAST2FLOW_ENV } as const;
 
+// fast2flow is two-tier: the deterministic BM25 host, then an LLM fallback
+// (greentic-start fast2flow/llm_router.rs) that fires ONLY when BM25 returns no
+// confident match AND the bundle declares a top-level `llm:` block. We exercise
+// both outcomes with one paraphrased "boarding" request that shares no tokens
+// with any intent's tags/utterances, plus a strict 0.5 deterministic threshold
+// so BM25 returns Continue: without an LLM it falls back; with one it routes.
+const STRICT_FAST2FLOW_ENV = { FAST2FLOW_MIN_CONFIDENCE: "0.5" };
+const LLM_ONLY_UTTERANCE =
+  "we're traveling for two weeks and need somewhere our pup can be cared for through the nights";
+// boarding_card title: "Book Boarding (Overnight Stay)".
+const BOARDING_CARD = /Book Boarding|Boarding|Overnight/i;
+// LLM tier gated on a real backend (OpenAI), mirroring deep-research-demo.
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
+const llmDemoOpts = {
+  name: "pet-daycare-demo",
+  envOverrides: STRICT_FAST2FLOW_ENV,
+  bundleLlm: {
+    provider: "openai",
+    model: process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini",
+    // env-var NAME greentic-start resolves the key from (gtcStart passes env).
+    api_key_secret: "OPENAI_API_KEY",
+    fast2flow_llm_min_confidence: 0.3,
+  },
+} as const;
+// Same utterance, no `llm:` block — the deterministic tier alone can't route it.
+const noLlmSemanticOpts = {
+  name: "pet-daycare-demo",
+  envOverrides: STRICT_FAST2FLOW_ENV,
+} as const;
+
 test.describe("pet-daycare-demo (fast2flow routing + confidence)", () => {
   test("smoke: welcome card auto-renders", async ({ page, gtcDemo }) => {
     const demo = await gtcDemo(demoOpts);
@@ -94,6 +124,75 @@ test.describe("pet-daycare-demo (fast2flow routing + confidence)", () => {
     expect(reply, "unmatched free text should hit the no-dispatch fallback").toMatch(
       NO_DISPATCH_FALLBACK,
     );
+  });
+
+  // --- LLM routing tier: works when an LLM is present, falls back when not. ---
+
+  test("functional: semantic free-text falls back when no LLM is configured", async ({
+    page,
+    gtcDemo,
+  }) => {
+    // No `llm:` block → only the deterministic BM25 tier runs. A paraphrased
+    // boarding request scores below the 0.5 threshold, so fast2flow returns
+    // Continue and (with no LLM to consult) degrades to the no-dispatch reply.
+    const demo = await gtcDemo(noLlmSemanticOpts);
+    const chat = new WebChat(page, demo.demoUrl);
+
+    await chat.open();
+    await expect(
+      page.locator(".ac-container").filter({ hasText: /Pet Daycare/i }).first(),
+    ).toBeVisible({ timeout: 30_000 });
+
+    await chat.send(LLM_ONLY_UTTERANCE);
+    const reply = await chat.awaitReply({ timeoutMs: 30_000 });
+    expect(
+      reply,
+      "BM25 can't match a paraphrase and there is no LLM tier, so it must fall back",
+    ).toMatch(NO_DISPATCH_FALLBACK);
+  });
+
+  test("functional: the LLM tier routes the semantic utterance to boarding", async ({
+    page,
+    gtcDemo,
+  }) => {
+    // The LLM fallback tier needs a real backend. Soft-skip when OPENAI_API_KEY
+    // is absent (mirrors deep-research-demo) so the suite is green by default
+    // and exercises real routing wherever the key is set.
+    test.skip(
+      !OPENAI_API_KEY,
+      "OPENAI_API_KEY not set; fast2flow LLM routing tier not exercised",
+    );
+    const demo = await gtcDemo(llmDemoOpts);
+    const chat = new WebChat(page, demo.demoUrl);
+
+    await chat.open();
+    await expect(
+      page.locator(".ac-container").filter({ hasText: /Pet Daycare/i }).first(),
+    ).toBeVisible({ timeout: 30_000 });
+
+    // Same paraphrase the no-LLM case fell back on — now the LLM tier resolves it.
+    await chat.send(LLM_ONLY_UTTERANCE);
+    await chat.awaitCardWithText(BOARDING_CARD, 30_000);
+    const body = await page.locator("body").innerText();
+    expect(body, "LLM tier should dispatch, not fall back").not.toMatch(
+      NO_DISPATCH_FALLBACK,
+    );
+    expect(body).not.toMatch(ERROR_MARKERS);
+
+    // The LLM tier emits the pinned dispatch line with a real confidence/target
+    // (llm_router.rs), independent of greentic-start#227 on the BM25 host.
+    const dispatch = findFast2flowDispatch(demo.bundleDir, demo.logFile);
+    if (dispatch !== null) {
+      console.log(
+        `[pet-daycare-demo] fast2flow LLM dispatch target=${dispatch.target} confidence=${dispatch.confidence}`,
+      );
+      expect(dispatch.target).toMatch(/boarding/i);
+      expect(
+        dispatch.confidence,
+        "LLM dispatch should clear its 0.3 min-confidence threshold",
+      ).toBeGreaterThanOrEqual(0.3);
+      expect(dispatch.confidence).toBeLessThanOrEqual(1.0);
+    }
   });
 });
 

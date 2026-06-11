@@ -20,6 +20,21 @@ export interface GtcDemo {
   logFile: string;
 }
 
+/**
+ * Top-level `llm:` block injected into the built bundle.yaml. fast2flow's LLM
+ * routing tier (greentic-start `bundle_config::peek_bundle_llm`) reads this
+ * block; `gtc wizard` doesn't emit one, so a demo that wants to exercise the
+ * LLM tier sets this and the fixture writes it onto bundle.yaml.
+ */
+export interface BundleLlm {
+  provider: string;
+  model?: string;
+  /** Secret ref or env-var NAME greentic-start resolves the key from. */
+  api_key_secret?: string;
+  base_url?: string;
+  fast2flow_llm_min_confidence?: number;
+}
+
 export interface DemoOptions {
   name: string;
   team?: string;
@@ -28,6 +43,8 @@ export interface DemoOptions {
   envOverrides?: Record<string, string>;
   skipIfMissingSecrets?: string[];
   releaseTag?: string;
+  /** When set, inject this `llm:` block; when null/omitted, strip any present. */
+  bundleLlm?: BundleLlm | null;
 }
 
 interface RunningDemo extends GtcDemo {
@@ -435,6 +452,56 @@ function rewriteLocalhostPort<T>(value: T, port: number): T {
   return value;
 }
 
+/**
+ * Inject (or strip) the top-level `llm:` block on a built bundle.yaml so
+ * fast2flow's LLM routing tier engages. gtc wizard never emits one. Idempotent:
+ * any prior `llm:` block is removed first, so toggling between LLM and no-LLM
+ * specs on the same cached bundle is order-independent. Runs after `gtc setup`
+ * (which can rewrite bundle.yaml) and before `greentic-start`.
+ */
+async function applyBundleLlm(
+  bundleDir: string,
+  llm: BundleLlm | null,
+): Promise<void> {
+  const bundleYaml = join(bundleDir, "bundle.yaml");
+  const original = await readFile(bundleYaml, "utf8");
+  const stripped = stripTopLevelBlock(original, "llm");
+  let next = stripped;
+  if (llm) {
+    const block = [`llm:`, `  provider: ${llm.provider}`];
+    if (llm.model) block.push(`  model: ${llm.model}`);
+    if (llm.api_key_secret) block.push(`  api_key_secret: ${llm.api_key_secret}`);
+    if (llm.base_url) block.push(`  base_url: ${llm.base_url}`);
+    if (llm.fast2flow_llm_min_confidence != null)
+      block.push(`  fast2flow_llm_min_confidence: ${llm.fast2flow_llm_min_confidence}`);
+    next = `${stripped.replace(/\n*$/, "")}\n${block.join("\n")}\n`;
+  }
+  if (next !== original) await writeFile(bundleYaml, next);
+}
+
+/**
+ * Remove a top-level YAML block (`<key>:` plus its indented body). bundle.yaml
+ * is flat top-level keys, so the block runs until the next non-indented line.
+ * Only used to clear an `llm:` block we ourselves write (no blank lines inside).
+ */
+function stripTopLevelBlock(yaml: string, key: string): string {
+  const lines = yaml.split("\n");
+  const out: string[] = [];
+  const keyRe = new RegExp(`^${key}:(\\s|$)`);
+  let i = 0;
+  while (i < lines.length) {
+    const line = lines[i] ?? "";
+    if (keyRe.test(line)) {
+      i++;
+      while (i < lines.length && /^\s+\S/.test(lines[i] ?? "")) i++;
+      continue;
+    }
+    out.push(line);
+    i++;
+  }
+  return out.join("\n");
+}
+
 async function findFreePort(): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = createServer();
@@ -663,6 +730,11 @@ export const test = base.extend<{
       // Populate dev-store with setup-answer secrets before startup.
       // Weather and webchat demos both resolve auth through this store.
       await seedSetupAnswerSecrets(bundleDir, setupAnswersPath, team);
+
+      // Toggle fast2flow's LLM routing tier on/off via the bundle's `llm:` block.
+      // Always normalize (inject or strip) so a leftover block from another spec
+      // never leaks into a BM25-only test on the shared cached bundle.
+      await applyBundleLlm(bundleDir, opts.bundleLlm ?? null);
 
       const logFile = join(
         bundleDir,
