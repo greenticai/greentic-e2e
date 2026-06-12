@@ -1,0 +1,86 @@
+{
+  "wizard_id": "greentic-dev.wizard.launcher.main",
+  "schema_id": "greentic-dev.launcher.main",
+  "schema_version": "1.0.0",
+  "locale": "en-GB",
+  "answers": {
+    "selected_action": "bundle",
+    "delegate_answer_document": {
+      "wizard_id": "greentic-bundle.wizard.run",
+      "schema_id": "greentic-bundle.wizard.answers",
+      "schema_version": "1.0.0",
+      "locale": "en-GB",
+      "answers": {
+        "access_rules": [
+          {
+            "policy": "public",
+            "rule_path": "pet-daycare-pack",
+            "tenant": "default"
+          },
+          {
+            "policy": "public",
+            "rule_path": "pet-daycare-pack",
+            "tenant": "demo"
+          }
+        ],
+        "advanced_setup": false,
+        "app_pack_entries": [
+          {
+            "detected_kind": "oci",
+            "display_name": "Pet Daycare Demo Pack",
+            "mapping": {
+              "scope": "global"
+            },
+            "pack_id": "pet-daycare-pack",
+            "reference": "oci://ghcr.io/greenticai/packs/demos/pet-daycare-app:latest"
+          }
+        ],
+        "app_packs": [
+          "oci://ghcr.io/greenticai/packs/demos/pet-daycare-app:latest"
+        ],
+        "bundle_id": "pet-daycare-demo",
+        "bundle_name": "pet-daycare-demo",
+        "capabilities": [
+          "greentic.cap.bundle_assets.read.v1",
+          "greentic.cap.fast2flow.v1"
+        ],
+        "export_intent": false,
+        "extension_provider_entries": [
+          {
+            "detected_kind": "oci",
+            "display_name": "Greentic Messaging Webchat GUI (latest)",
+            "provider_id": "greentic.messaging.webchat-gui.latest",
+            "reference": "oci://ghcr.io/greenticai/packs/messaging/messaging-webchat-gui:stable",
+            "version": "latest"
+          },
+          {
+            "detected_kind": "oci",
+            "display_name": "Greentic State Memory (stable)",
+            "provider_id": "state-memory",
+            "reference": "oci://ghcr.io/greenticai/packs/state/state-memory:stable",
+            "version": "stable"
+          }
+        ],
+        "extension_providers": [
+          "oci://ghcr.io/greenticai/packs/messaging/messaging-webchat-gui:stable",
+          "oci://ghcr.io/greenticai/packs/state/state-memory:stable"
+        ],
+        "mode": "create",
+        "output_dir": "./pet-daycare-demo-bundle",
+        "remote_catalogs": [],
+        "setup_answers": {},
+        "setup_execution_intent": false,
+        "setup_specs": {}
+      },
+      "locks": {
+        "cache_policy": "workspace-local",
+        "catalogs": [],
+        "execution": "execute",
+        "lock_file": "bundle.lock.json",
+        "requested_mode": "create",
+        "setup_state_files": [],
+        "workspace_root": "bundle.yaml"
+      }
+    }
+  }
+}
