@@ -92,6 +92,9 @@ jobs:
           DEMO_FILTER: ${{ env.DEMO_FILTER }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+          # Backs the pet-daycare fast2flow LLM routing-tier test; when unset the
+          # test soft-skips. DeepSeek is a native greentic-llm provider.
+          DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
         run: npx playwright test --project="${GTC_CHANNEL}"
 
       - name: Upload Playwright report
