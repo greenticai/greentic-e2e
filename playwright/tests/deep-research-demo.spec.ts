@@ -7,10 +7,10 @@ const ERROR_MARKERS = /error|exception|panic|stack trace/i;
 // the test immediately with the actual error instead of waiting out the
 // 3-minute reply poll.
 const LLM_FATAL_MARKERS: Array<{ re: RegExp; label: string }> = [
-  { re: /insufficient_quota/i, label: "OpenAI quota exhausted (HTTP 429 insufficient_quota)" },
-  { re: /provider returned status 401/i, label: "OpenAI auth rejected (HTTP 401)" },
-  { re: /provider returned status 403/i, label: "OpenAI auth rejected (HTTP 403)" },
-  { re: /provider returned status 5\d\d/i, label: "OpenAI upstream 5xx" },
+  { re: /insufficient_quota/i, label: "LLM quota exhausted (HTTP 429 insufficient_quota)" },
+  { re: /provider returned status 401/i, label: "LLM auth rejected (HTTP 401)" },
+  { re: /provider returned status 403/i, label: "LLM auth rejected (HTTP 403)" },
+  { re: /provider returned status 5\d\d/i, label: "LLM upstream 5xx" },
   { re: /pack execution failed: component component-llm-/i, label: "LLM component crashed" },
 ];
 
@@ -112,20 +112,20 @@ test.describe("deep-research-demo (PR-1 walking skeleton)", () => {
   });
 
   // Bot reply requires an LLM. Either:
-  //   - OPENAI_API_KEY set (real OpenAI), or
+  //   - DEEPSEEK_KEY set (DeepSeek via its OpenAI-compatible endpoint), or
   //   - LOCAL_LLM=1 with a local Ollama at http://127.0.0.1:11434 serving
   //     the model the demo's setup-answers point to (gemma3:latest by default).
   //
   // Flow: welcome card (main_menu.json) → fill textarea → click "Single Shot"
   // → research_analyst LLM node → final_report.json card (shows
   // "Processing…" then replaces with LLM output once done).
-  test("functional: single-shot research query returns LLM answer (needs OPENAI_API_KEY or LOCAL_LLM=1)", async ({
+  test("functional: single-shot research query returns LLM answer (needs DEEPSEEK_KEY or LOCAL_LLM=1)", async ({
     page,
     gtcDemo,
   }) => {
     test.skip(
-      !process.env.OPENAI_API_KEY && process.env.LOCAL_LLM !== "1",
-      "needs OPENAI_API_KEY or LOCAL_LLM=1 (with local Ollama running gemma3:latest)",
+      !process.env.DEEPSEEK_KEY && process.env.LOCAL_LLM !== "1",
+      "needs DEEPSEEK_KEY or LOCAL_LLM=1 (with local Ollama running gemma3:latest)",
     );
     const demo = await gtcDemo({ name: "deep-research-demo" });
     const chat = new WebChat(page, demo.demoUrl);
