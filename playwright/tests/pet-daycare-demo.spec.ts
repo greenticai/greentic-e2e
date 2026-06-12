@@ -29,16 +29,17 @@ const LLM_ONLY_UTTERANCE =
   "we're traveling for two weeks and need somewhere our pup can be cared for through the nights";
 // boarding_card title: "Book Boarding (Overnight Stay)".
 const BOARDING_CARD = /Book Boarding|Boarding|Overnight/i;
-// LLM tier gated on a real backend (OpenAI), mirroring deep-research-demo.
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
+// LLM tier gated on a real backend (DeepSeek — a native greentic-llm provider,
+// ProviderKind::Deepseek). Mirrors deep-research-demo's env-gated pattern.
+const DEEPSEEK_KEY = process.env.DEEPSEEK_KEY?.trim();
 const llmDemoOpts = {
   name: "pet-daycare-demo",
   envOverrides: STRICT_FAST2FLOW_ENV,
   bundleLlm: {
-    provider: "openai",
-    model: process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini",
+    provider: "deepseek",
+    model: process.env.DEEPSEEK_MODEL?.trim() || "deepseek-chat",
     // env-var NAME greentic-start resolves the key from (gtcStart passes env).
-    api_key_secret: "OPENAI_API_KEY",
+    api_key_secret: "DEEPSEEK_KEY",
     fast2flow_llm_min_confidence: 0.3,
   },
 } as const;
@@ -155,12 +156,12 @@ test.describe("pet-daycare-demo (fast2flow routing + confidence)", () => {
     page,
     gtcDemo,
   }) => {
-    // The LLM fallback tier needs a real backend. Soft-skip when OPENAI_API_KEY
+    // The LLM fallback tier needs a real backend. Soft-skip when DEEPSEEK_KEY
     // is absent (mirrors deep-research-demo) so the suite is green by default
     // and exercises real routing wherever the key is set.
     test.skip(
-      !OPENAI_API_KEY,
-      "OPENAI_API_KEY not set; fast2flow LLM routing tier not exercised",
+      !DEEPSEEK_KEY,
+      "DEEPSEEK_KEY not set; fast2flow LLM routing tier not exercised",
     );
     const demo = await gtcDemo(llmDemoOpts);
     const chat = new WebChat(page, demo.demoUrl);
