@@ -104,10 +104,10 @@ jobs:
         env:
           GTC_BIN: gtc-${{ matrix.channel }}
           DEMO_FILTER: ${{ env.DEMO_FILTER }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
-          # Backs the pet-daycare fast2flow LLM routing-tier test; when unset the
-          # test soft-skips. DeepSeek is a native greentic-llm provider.
+          # DeepSeek backs every LLM-based test (pet-daycare fast2flow tier,
+          # deep-research, helpdesk-itsm). When unset they soft-skip. DeepSeek
+          # is a native greentic-llm provider / OpenAI-compatible endpoint.
           DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
         run: npx playwright test --project="${GTC_CHANNEL}"
 

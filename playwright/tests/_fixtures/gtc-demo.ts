@@ -93,9 +93,9 @@ function maskSecret(s: string): string {
   return `${s.slice(0, 4)}…${s.slice(-4)} (len=${s.length})`;
 }
 
-const ENV_PLACEHOLDER_DEFAULTS: Record<string, string> = {
-  OPENAI_MODEL: "gpt-4o-mini",
-};
+// Defaults for ${VAR} placeholders in answer files when the env var is unset.
+// (LLM demos now hardcode DeepSeek model/url, so no OpenAI defaults remain.)
+const ENV_PLACEHOLDER_DEFAULTS: Record<string, string> = {};
 
 function substituteEnvPlaceholders<T>(value: T): T {
   if (typeof value === "string") {
