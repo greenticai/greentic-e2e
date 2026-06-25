@@ -4,8 +4,7 @@
       "redis_url": "redis://127.0.0.1:6379"
     },
     "deep-research-demo": {
-      "provider": "openai",
-      "url": "https://api.deepseek.com/v1",
+      "provider": "deepseek",
       "model": "deepseek-chat",
       "api_key_secret": "${DEEPSEEK_KEY}"
     }
