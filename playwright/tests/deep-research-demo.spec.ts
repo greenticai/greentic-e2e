@@ -116,6 +116,18 @@ test.describe("deep-research-demo (PR-1 walking skeleton)", () => {
   //   - LOCAL_LLM=1 with a local Ollama at http://127.0.0.1:11434 serving
   //     the model the demo's setup-answers point to (gemma3:latest by default).
   //
+  // KNOWN LIMITATION (not a regression): with DEEPSEEK_KEY this node currently
+  // soft-skips on `HTTP 401`. The research_analyst node runs in the upstream
+  // `component-llm` WASM pack, whose `openai` provider ignores the setup-answer
+  // `url`/`base_url` and always calls api.openai.com — so a DeepSeek key 401s.
+  // Native `provider: "deepseek"` 401s too (the component has no deepseek
+  // provider). Both were verified in CI. Contrast pet-daycare's fast2flow tier,
+  // which uses greentic-llm's native ProviderKind::Deepseek and DOES drive a
+  // real DeepSeek call. Making THIS path run on DeepSeek needs a cross-repo fix
+  // to component-llm (honor base_url, or add a deepseek provider); once shipped
+  // this test flips skip→pass with no change here. Until then it needs a real
+  // OpenAI key (via LOCAL_LLM=1 / Ollama for local runs).
+  //
   // Flow: welcome card (main_menu.json) → fill textarea → click "Single Shot"
   // → research_analyst LLM node → final_report.json card (shows
   // "Processing…" then replaces with LLM output once done).
@@ -198,6 +210,9 @@ test.describe("deep-research-demo (PR-1 walking skeleton)", () => {
         },
       )
       .toMatch(/^(?:__ready__|__llm_fatal__)$/);
+    // With DEEPSEEK_KEY this reliably trips on HTTP 401 — see the KNOWN
+    // LIMITATION note above (component-llm can't reach DeepSeek). The soft-skip
+    // keeps that a non-failure; a real OpenAI key (or LOCAL_LLM) exercises it.
     test.skip(
       fatal !== null,
       `LLM provider unavailable: ${fatal} (treating as test infra outage, not a flow regression)`,
