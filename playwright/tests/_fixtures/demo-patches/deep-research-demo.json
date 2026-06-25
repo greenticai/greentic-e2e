@@ -5,9 +5,9 @@
     },
     "deep-research-demo": {
       "provider": "openai",
-      "url": "https://api.openai.com/v1",
-      "model": "${OPENAI_MODEL}",
-      "api_key_secret": "${OPENAI_API_KEY}"
+      "url": "https://api.deepseek.com/v1",
+      "model": "deepseek-chat",
+      "api_key_secret": "${DEEPSEEK_KEY}"
     }
   }
 }

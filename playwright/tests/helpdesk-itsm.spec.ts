@@ -59,15 +59,24 @@ test.describe("helpdesk-itsm demo (Phase 0 walking skeleton)", () => {
   // silent. Confirmed via CI run #7 page snapshot: feed contains user article
   // only, no bot reply, even for "I need to report a printer issue".
   //
-  // Set OPENAI_API_KEY (or future ANTHROPIC_API_KEY) in repo Actions secrets,
-  // then this test runs and asserts the demo's actual ticket-intent reply.
+  // Set DEEPSEEK_KEY in repo Actions secrets, then this test runs and asserts
+  // the demo's actual ticket-intent reply. The bundleLlm block points the LLM
+  // at DeepSeek (OpenAI-compatible endpoint) like the other LLM demos. NOTE:
+  // helpdesk-itsm is not in the active testMatch yet, so this path is wired but
+  // unverified — confirm the LLM provider plumbing when it is re-enabled.
   test("functional: ticket-intent reply (skipped when LLM key absent)", async ({
     page,
     gtcDemo,
   }) => {
     const demo = await gtcDemo({
       name: "helpdesk-itsm",
-      skipIfMissingSecrets: ["OPENAI_API_KEY"],
+      skipIfMissingSecrets: ["DEEPSEEK_KEY"],
+      bundleLlm: {
+        provider: "openai",
+        model: "deepseek-chat",
+        api_key_secret: "DEEPSEEK_KEY",
+        base_url: "https://api.deepseek.com/v1",
+      },
     });
     const chat = new WebChat(page, demo.demoUrl);
 

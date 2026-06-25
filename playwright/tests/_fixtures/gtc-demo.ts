@@ -93,9 +93,9 @@ function maskSecret(s: string): string {
   return `${s.slice(0, 4)}…${s.slice(-4)} (len=${s.length})`;
 }
 
-const ENV_PLACEHOLDER_DEFAULTS: Record<string, string> = {
-  OPENAI_MODEL: "gpt-4o-mini",
-};
+// Defaults for ${VAR} placeholders in answer files when the env var is unset.
+// (LLM demos now hardcode DeepSeek model/url, so no OpenAI defaults remain.)
+const ENV_PLACEHOLDER_DEFAULTS: Record<string, string> = {};
 
 function substituteEnvPlaceholders<T>(value: T): T {
   if (typeof value === "string") {
@@ -343,12 +343,13 @@ async function applyAnswersPatch(
     ? JSON.parse(await readFile(patchPath, "utf8"))
     : {};
   // The deep-research-demo patch declares a cloud-LLM override gated on
-  // OPENAI_API_KEY (see demo-patches/deep-research-demo.json). When the
-  // key is missing, drop the override entirely so the upstream local-LLM
-  // (Ollama) defaults survive for the LOCAL_LLM=1 path.
+  // DEEPSEEK_KEY (see demo-patches/deep-research-demo.json — DeepSeek via its
+  // OpenAI-compatible endpoint). When the key is missing, drop the override
+  // entirely so the upstream local-LLM (Ollama) defaults survive for the
+  // LOCAL_LLM=1 path.
   if (
     demoName === "deep-research-demo" &&
-    !process.env.OPENAI_API_KEY?.trim()
+    !process.env.DEEPSEEK_KEY?.trim()
   ) {
     const patchSetupAnswers = (
       patch as { setup_answers?: Record<string, unknown> }
@@ -410,8 +411,9 @@ async function applyAnswersPatch(
     const url = deepResearch["url"];
     const apiKey = deepResearch["api_key_secret"];
     if (provider === "openai") {
+      // Cloud branch: DeepSeek via its OpenAI-compatible endpoint (url shows it).
       console.log(
-        `[deep-research-demo] llm=cloud provider=openai model=${model} url=${url} key=${typeof apiKey === "string" ? maskSecret(apiKey) : "<unset>"}`,
+        `[deep-research-demo] llm=cloud provider=${provider} model=${model} url=${url} key=${typeof apiKey === "string" ? maskSecret(apiKey) : "<unset>"}`,
       );
     } else {
       console.log(
