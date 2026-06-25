@@ -61,7 +61,7 @@ test.describe("helpdesk-itsm demo (Phase 0 walking skeleton)", () => {
   //
   // Set DEEPSEEK_KEY in repo Actions secrets, then this test runs and asserts
   // the demo's actual ticket-intent reply. The bundleLlm block points the LLM
-  // at DeepSeek (native greentic-llm provider) like the other LLM demos. NOTE:
+  // at DeepSeek (OpenAI-compatible endpoint) like the other LLM demos. NOTE:
   // helpdesk-itsm is not in the active testMatch yet, so this path is wired but
   // unverified — confirm the LLM provider plumbing when it is re-enabled.
   test("functional: ticket-intent reply (skipped when LLM key absent)", async ({
@@ -72,9 +72,10 @@ test.describe("helpdesk-itsm demo (Phase 0 walking skeleton)", () => {
       name: "helpdesk-itsm",
       skipIfMissingSecrets: ["DEEPSEEK_KEY"],
       bundleLlm: {
-        provider: "deepseek",
+        provider: "openai",
         model: "deepseek-chat",
         api_key_secret: "DEEPSEEK_KEY",
+        base_url: "https://api.deepseek.com/v1",
       },
     });
     const chat = new WebChat(page, demo.demoUrl);

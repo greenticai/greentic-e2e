@@ -343,9 +343,10 @@ async function applyAnswersPatch(
     ? JSON.parse(await readFile(patchPath, "utf8"))
     : {};
   // The deep-research-demo patch declares a cloud-LLM override gated on
-  // DEEPSEEK_KEY (see demo-patches/deep-research-demo.json — native DeepSeek
-  // provider). When the key is missing, drop the override entirely so the
-  // upstream local-LLM (Ollama) defaults survive for the LOCAL_LLM=1 path.
+  // DEEPSEEK_KEY (see demo-patches/deep-research-demo.json — DeepSeek via its
+  // OpenAI-compatible endpoint). When the key is missing, drop the override
+  // entirely so the upstream local-LLM (Ollama) defaults survive for the
+  // LOCAL_LLM=1 path.
   if (
     demoName === "deep-research-demo" &&
     !process.env.DEEPSEEK_KEY?.trim()
@@ -409,11 +410,10 @@ async function applyAnswersPatch(
     const model = deepResearch["model"];
     const url = deepResearch["url"];
     const apiKey = deepResearch["api_key_secret"];
-    if (provider === "deepseek") {
-      // Cloud branch: native DeepSeek provider, endpoint pinned via the patch's
-      // `url` (overrides the upstream answers' default OpenAI host).
+    if (provider === "openai") {
+      // Cloud branch: DeepSeek via its OpenAI-compatible endpoint (url shows it).
       console.log(
-        `[deep-research-demo] llm=cloud provider=${provider} model=${model} url=${url ?? "<native>"} key=${typeof apiKey === "string" ? maskSecret(apiKey) : "<unset>"}`,
+        `[deep-research-demo] llm=cloud provider=${provider} model=${model} url=${url} key=${typeof apiKey === "string" ? maskSecret(apiKey) : "<unset>"}`,
       );
     } else {
       console.log(

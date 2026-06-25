@@ -121,7 +121,8 @@ jobs:
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
           # DeepSeek backs every LLM-based test (pet-daycare fast2flow tier,
           # deep-research, helpdesk-itsm). When unset they soft-skip. DeepSeek
-          # is a native greentic-llm provider (ProviderKind::Deepseek).
+          # is a native greentic-llm provider (pet-daycare's fast2flow tier) and
+          # an OpenAI-compatible endpoint (deep-research/helpdesk component-llm).
           DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
         run: npx playwright test --project="${GTC_CHANNEL}"
 
