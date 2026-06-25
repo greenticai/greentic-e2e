@@ -410,7 +410,8 @@ async function applyAnswersPatch(
     const url = deepResearch["url"];
     const apiKey = deepResearch["api_key_secret"];
     if (provider === "deepseek") {
-      // Cloud branch: native DeepSeek provider (endpoint is provider-supplied).
+      // Cloud branch: native DeepSeek provider, endpoint pinned via the patch's
+      // `url` (overrides the upstream answers' default OpenAI host).
       console.log(
         `[deep-research-demo] llm=cloud provider=${provider} model=${model} url=${url ?? "<native>"} key=${typeof apiKey === "string" ? maskSecret(apiKey) : "<unset>"}`,
       );
