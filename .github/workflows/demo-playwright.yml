@@ -22,27 +22,41 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Build the channel matrix from the workflow_dispatch `gtc_channel` input so a
+  # manual run can target a single channel (e.g. "stable" -> stable-linux only).
+  # Scheduled runs (no input) fall back to "both". stable-macos is intentionally
+  # absent because `gtc install` falls back to `greentic-setup@0.5.1` on macOS
+  # (Maarten's Fix 2 `--non-interactive` only ships in 0.5.2 and the macOS
+  # aarch64 artifact for 0.5.2 is missing/broken in the greentic-setup release).
+  # Restore the cell once the upstream artifact is published. See PR-1 item #6.
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        shell: bash
+        env:
+          REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.gtc_channel || 'both' }}
+        run: |
+          set -euo pipefail
+          stable='{"label":"stable-linux","runner":"ubuntu-24.04","channel":"stable"}'
+          dev='{"label":"dev-linux","runner":"ubuntu-24.04","channel":"dev"}'
+          case "$REQUESTED" in
+            stable) include="[$stable]" ;;
+            dev)    include="[$dev]" ;;
+            *)      include="[$stable,$dev]" ;;
+          esac
+          echo "matrix={\"include\":$include}" >> "$GITHUB_OUTPUT"
+
   e2e:
+    needs: plan
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - label: stable-linux
-            runner: ubuntu-24.04
-            channel: stable
-          - label: dev-linux
-            runner: ubuntu-24.04
-            channel: dev
-          # stable-macos is intentionally dropped from PR-1 matrix because
-          # `gtc install` falls back to `greentic-setup@0.5.1` on macOS
-          # (Maarten's Fix 2 `--non-interactive` only ships in 0.5.2 and
-          # the macOS aarch64 artifact for 0.5.2 is missing/broken in
-          # the GitHub release for the greentic-setup repo). Restore the
-          # cell once the upstream artifact is published. See PR-1
-          # punch-list item #6.
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
       GTC_CHANNEL: ${{ matrix.channel }}
       DEMO_FILTER: ${{ inputs.demo_filter || 'all' }}
