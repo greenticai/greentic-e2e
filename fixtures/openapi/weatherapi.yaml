@@ -1,0 +1,45 @@
+openapi: 3.0.3
+info:
+  title: WeatherAPI Current
+  version: "1.0.0"
+  description: >
+    Minimal OpenAPI 3.0 spec used by the mcp-openapi-gen e2e. It exercises the
+    two describe.json enrichment paths in `gtdx new --kind mcp --from-openapi`:
+    the `servers:` origin populates `runtime.permissions.network`, and the
+    `apiKey` security scheme referenced by the operation populates
+    `secret_requirements` (via greentic-mcp-gen's security-scheme inference).
+servers:
+  - url: https://api.weatherapi.com/v1
+paths:
+  /current.json:
+    get:
+      summary: Current weather for a location
+      operationId: getCurrentWeather
+      security:
+        - ApiKeyAuth: []
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: Location query (city name, lat/lon, IP, etc.)
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  location:
+                    type: object
+                  current:
+                    type: object
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: query
+      name: key
+      description: WeatherAPI authentication key

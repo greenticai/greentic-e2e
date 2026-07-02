@@ -1,0 +1,120 @@
+name: MCP OpenAPI Gen E2E
+
+# Regression guard for `gtdx new --kind mcp --from-openapi <spec>`: the
+# OpenAPI -> wasix:mcp/router path that stitches together two private repos
+# (greentic-designer-sdk's `gtdx` + greentic-mcp-generator's `greentic-mcp-gen`)
+# plus a real wasm32-wasip2 build. Each repo unit-tests its own half; only an
+# e2e that runs the real binaries end-to-end catches contract drift between
+# them (the component-meta.json shape, gtdx's hermetic-execution guard, and the
+# describe.json enrichment: network from `servers:`, secret_requirements from
+# the spec's security scheme) and shape regressions in the generated artifact.
+#
+# Binaries are BUILT FROM SOURCE (mcp-generator@main, designer-sdk@research)
+# rather than binstalled, so this tests the latest merged code — the released
+# binaries are private and can lag. See `scripts/run_mcp_openapi_gen_e2e.sh`.
+
+on:
+  schedule:
+    # 03:00 UTC — after nightly (00:00), provider (00:30), webchat (01:00),
+    # cloud-demo (02:00) to avoid GHA runner contention.
+    - cron: "0 3 * * *"
+  workflow_dispatch:
+    inputs:
+      mcp_generator_ref:
+        description: "greentic-mcp-generator git ref"
+        required: false
+        default: "main"
+      designer_sdk_ref:
+        description: "greentic-designer-sdk git ref"
+        required: false
+        default: "research"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  mcp-openapi-gen:
+    name: gtdx new --from-openapi -> wasix:mcp/router
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout e2e harness
+        uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        shell: bash
+        run: |
+          # jq: the e2e driver asserts on describe.json.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq jq
+
+      - name: Bootstrap Rust toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          # GHA ubuntu-24.04 ships rustup with `stable` pre-installed; greentic
+          # crates require 1.95, so pin explicitly regardless.
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --profile minimal --default-toolchain 1.95.0
+          fi
+          export PATH="$HOME/.cargo/bin:$PATH"
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+          rustup target add wasm32-wasip2
+          rustc --version
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Install cargo-binstall + cargo-component
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
+          curl -L --proto '=https' --tlsv1.2 -sSf \
+            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
+            | bash
+          # cargo-component: greentic-mcp-gen shells out to it to build the
+          # generated wasix:mcp/router component for wasm32-wasip2.
+          cargo binstall -y cargo-component
+
+      # Both source repos are PRIVATE — checkout needs a PAT with read access to
+      # greentic-biz/greentic-mcp-generator and greenticai/greentic-designer-sdk.
+      # Provide it as the repo/org secret GREENTIC_GH_TOKEN.
+      - name: Checkout greentic-mcp-generator
+        uses: actions/checkout@v4
+        with:
+          repository: greentic-biz/greentic-mcp-generator
+          ref: ${{ github.event.inputs.mcp_generator_ref || 'main' }}
+          token: ${{ secrets.GREENTIC_GH_TOKEN }}
+          path: _src/greentic-mcp-generator
+
+      - name: Checkout greentic-designer-sdk
+        uses: actions/checkout@v4
+        with:
+          repository: greenticai/greentic-designer-sdk
+          ref: ${{ github.event.inputs.designer_sdk_ref || 'research' }}
+          token: ${{ secrets.GREENTIC_GH_TOKEN }}
+          path: _src/greentic-designer-sdk
+
+      - name: Build greentic-mcp-gen + gtdx from source
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
+          # Build from the checked-out repo roots so each binary's baked
+          # CARGO_MANIFEST_DIR resolves its own workspace (path deps).
+          ( cd _src/greentic-mcp-generator && cargo build --release -p greentic-mcp-generator )
+          ( cd _src/greentic-designer-sdk && cargo build --release -p greentic-extension-sdk-cli --bin gtdx )
+          echo "GTDX_MCP_GEN_BIN=$PWD/_src/greentic-mcp-generator/target/release/greentic-mcp-gen" >> "$GITHUB_ENV"
+          echo "GTDX_BIN=$PWD/_src/greentic-designer-sdk/target/release/gtdx" >> "$GITHUB_ENV"
+
+      - name: Run mcp-openapi-gen e2e
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
+          bash scripts/run_mcp_openapi_gen_e2e.sh
