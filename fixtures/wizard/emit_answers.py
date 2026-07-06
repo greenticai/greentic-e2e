@@ -98,6 +98,11 @@ def main() -> int:
         (r"Select number or value:", "1", 30),
         (r"Select number or value:", "4", 30),
         (r"Select number or value:", "4", 30),
+        # Toolchain 1.1.2 added a cloud deployer target menu between the
+        # extension-providers menu and the assets question. Anchor on the
+        # distinctive prompt text (wait_for matches the accumulated buffer,
+        # so a generic "Select number or value:" would match earlier output).
+        (r"Choose cloud deployer target", "1", 30),
         (r"Enable bundle-level assets.*\[false\]:", "n", 30),
         (r"Select number or value:", "3", 30),
     ]
@@ -110,9 +115,30 @@ def main() -> int:
             send_line(master_fd, answer)
 
     if wait_for(proc, master_fd, r"Select option:", timeout=10, buf=buf):
-        send_line(master_fd, "0")
+        try:
+            send_line(master_fd, "0")
+        except OSError:
+            pass  # wizard may already have exited after "Save answers only"
 
-    code = proc.wait(timeout=30)
+    # Toolchain 1.1.2 prints a large review-summary JSON before exiting.
+    # Keep draining the pty until the process exits so it never blocks on a
+    # full pty output buffer while we wait for it.
+    deadline = time.monotonic() + 30
+    while proc.poll() is None and time.monotonic() < deadline:
+        ready, _, _ = select.select([master_fd], [], [], 0.2)
+        if ready:
+            try:
+                chunk = os.read(master_fd, 4096)
+            except OSError:
+                break
+            if chunk:
+                buf.append(chunk.decode("utf-8", errors="ignore"))
+
+    try:
+        code = proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        return fail("gtc wizard did not exit within 30s of final answer", buf)
     if code != 0:
         return fail(f"gtc wizard exited with code {code}", buf)
     return 0

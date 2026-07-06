@@ -24,7 +24,7 @@
           "oci://ghcr.io/greenticai/packs/messaging/messaging-webchat-gui:latest",
           "oci://ghcr.io/greenticai/packs/events/events-webhook:latest",
           "oci://ghcr.io/greenticai/packs/state/state-redis:latest",
-          "oci://ghcr.io/greenticai/packs/deployer/greentic.fixture.serverless.gtpack:latest",
+          "oci://ghcr.io/greenticai/packs/deployer/greentic.deploy.serverless:latest",
           "oci://ghcr.io/greenticai/packs/secret/greentic.secrets.aws-sm.gtpack:latest",
           "oci://ghcr.io/greenticai/packs/oauth/oauth-oidc-generic:latest"
         ]

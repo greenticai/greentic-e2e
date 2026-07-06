@@ -400,12 +400,15 @@ jobs:
             >"$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
 
           grep -q '"ok": true' "$WIZARD_E2E_ROOT/wizard-bundle-doctor.log"
-          grep -q '"messaging-webchat-gui"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
-          grep -q '"events-webhook"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
-          grep -q '"state-redis"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
-          grep -q '"oauth-oidc-generic"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
-          grep -q '"greentic.secrets.aws-sm.gtpack:latest"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
-          grep -q '"greentic.fixture.serverless.gtpack:latest"' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          # Toolchain 1.1.2 inspect --json lists extension providers as full
+          # OCI reference strings (oci://ghcr.io/.../messaging-webchat-gui:latest),
+          # not bare quoted short ids — match on the unquoted name.
+          grep -q 'messaging-webchat-gui' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q 'events-webhook' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q 'state-redis' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q 'oauth-oidc-generic' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q 'greentic.secrets.aws-sm.gtpack:latest' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q 'greentic.deploy.serverless' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
           grep -q "\"${WIZARD_DEMO_APP_PACK_DIR}\"" "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
 
       - name: Print tenant install context
