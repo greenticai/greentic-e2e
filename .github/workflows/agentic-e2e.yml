@@ -36,10 +36,11 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Check required secret
+        env:
+          LLM_KEY: ${{ secrets.DEEPSEEK_KEY || secrets.GREENTIC_LLM_API_KEY }}
         run: |
-          if [ -z "${{ secrets.GREENTIC_LLM_API_KEY }}" ]; then
-            echo "::error::GREENTIC_LLM_API_KEY secret is not set — the agentic worker needs an LLM key to run."
-            echo "Add it in the greentic-e2e repo settings (Settings → Secrets → Actions)."
+          if [ -z "${LLM_KEY}" ]; then
+            echo "::error::No LLM key set — the agentic worker needs one to run. Add DEEPSEEK_KEY (or GREENTIC_LLM_API_KEY) in Settings → Secrets → Actions."
             exit 1
           fi
 
@@ -50,7 +51,9 @@ jobs:
 
       - name: Run agentic worker e2e
         env:
-          GREENTIC_LLM_API_KEY: ${{ secrets.GREENTIC_LLM_API_KEY }}
+          # DEEPSEEK_KEY is the LLM key already configured in this repo; fall
+          # back to a generic GREENTIC_LLM_API_KEY if that is used instead.
+          GREENTIC_LLM_API_KEY: ${{ secrets.DEEPSEEK_KEY || secrets.GREENTIC_LLM_API_KEY }}
           GREENTIC_LLM_PROVIDER: ${{ vars.GREENTIC_LLM_PROVIDER || 'deepseek' }}
           GREENTIC_LLM_MODEL: ${{ vars.GREENTIC_LLM_MODEL || 'deepseek-chat' }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
