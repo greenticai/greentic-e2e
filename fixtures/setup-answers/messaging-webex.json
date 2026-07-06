@@ -4,6 +4,7 @@
     "public_base_url": "${PUBLIC_BASE_URL}",
     "api_base_url": "https://webexapis.com/v1",
     "webex_bot_token": "${WEBEX_BOT_TOKEN}",
+    "bot_email": "greentic-e2e@webex.bot",
     "default_room_id": "",
     "default_to_person_email": ""
   }
