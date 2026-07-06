@@ -1,0 +1,15 @@
+{
+  "_comment": "Setup answers for the agentic-research-tavily demo (dw.agent). Secrets are injected from the environment (GREENTIC_LLM_API_KEY, TAVILY_API_KEY) at runtime. This is a template — regenerate/confirm the exact keys against the released bundle with: gtc setup --dry-run --emit-answers answers.json <bundle_dir>, then keep the ${ENV_VAR} placeholders for CI.",
+  "llm": {
+    "enabled": true,
+    "provider": "${GREENTIC_LLM_PROVIDER}",
+    "api_key": "${GREENTIC_LLM_API_KEY}",
+    "model": "${GREENTIC_LLM_MODEL}"
+  },
+  "tools": {
+    "tavily": {
+      "enabled": true,
+      "api_key": "${TAVILY_API_KEY}"
+    }
+  }
+}
