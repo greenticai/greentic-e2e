@@ -36,34 +36,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Bootstrap toolchain
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! command -v rustup >/dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95.0
-            export PATH="$HOME/.cargo/bin:$PATH"
-          fi
-          rustup toolchain install 1.95.0 --profile minimal
-          rustup default 1.95.0
-
-      - name: Install cargo-binstall
-        shell: bash
-        run: |
-          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
-
-      - name: Install gtc CLI
-        shell: bash
-        env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-        run: |
-          if [[ -z "${GTC_VERSION}" || "${GTC_VERSION}" == "latest" ]]; then
-            cargo binstall -y gtc
-          else
-            cargo binstall -y "gtc@${GTC_VERSION}"
-          fi
-          gtc --version
-          gtc install --channel stable
+      - name: Set up Greentic toolchain
+        uses: ./.github/actions/setup-greentic
+        with:
+          gtc-version: ${{ env.GTC_VERSION }}
 
       - name: Run telemetry E2E
         shell: bash
