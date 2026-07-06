@@ -16,12 +16,18 @@ This repository automates the validation of `gtc` installation and initializatio
 5.  **Provider Lifecycle**: Verifies `wizard -> setup -> start -> ingress -> stop` for provider bundles.
 6.  **Cloud Demo Lifecycle**: Work in progress harness for `wizard -> setup --no-ui -> start --target <aws|azure|gcp> -> web UI -> optional admin tunnel -> stop --destroy`.
 7.  **Store Dual-Publish Lifecycle**: Drives the greentic-store-server agentic-worker contract `publish -> install -> run` against a real Postgres + MinIO + store container, with the designer side simulated via curl.
+8.  **Agentic Worker (`dw.agent`)**: Boots the tavily agentic demo bundle, drives one Plan-Act-Observe turn over the WebChat DirectLine rail, and asserts the worker returns a real reply. Regression guard for the whole agentic runtime chain. Needs only an LLM key; no Redis.
 
 ## Local Scripts
 
 Provider lifecycle:
 ```bash
 ./scripts/run_provider_e2e.sh
+```
+
+Agentic worker (`dw.agent`):
+```bash
+GREENTIC_LLM_API_KEY=sk-... ./scripts/run_agentic_e2e.sh
 ```
 
 Store dual-publish lifecycle (requires docker; no credentials):

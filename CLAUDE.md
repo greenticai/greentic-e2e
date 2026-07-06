@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 End-to-end tests for the Greentic CLI (`gtc`). This repo contains **no Rust code** — tests are pure Bash scripts, Python (pty-based wizard drivers), and TypeScript (Playwright). There is no `Cargo.toml` or `rust-toolchain.toml`.
 
-Nine workflows run nightly (or on-demand) via GitHub Actions:
+Ten workflows run nightly (or on-demand) via GitHub Actions:
 
 1. **Nightly Install/Wizard** (`nightly-e2e.yml`, 00:00 UTC) - Tests `gtc install`, `gtc doctor`, and `gtc wizard` across 6 platform/arch combos (Linux x64/arm64, macOS arm64/x64, Windows x64/arm64). Uses `expect` scripts for interactive wizard testing.
 2. **Provider E2E** (`provider-e2e.yml`, 00:30 UTC) - Full provider lifecycle: bundle creation, setup, start, HTTP ingress verification, and shutdown. Tests all messaging and event providers.
@@ -17,6 +17,7 @@ Nine workflows run nightly (or on-demand) via GitHub Actions:
 7. **Demo Playwright E2E** (`demo-playwright.yml`, 03:30 UTC) - Browser-driven demo site tests via Playwright. See `playwright/` sub-package.
 8. **Notify Scheduled Failures** (`notify-scheduled-failures.yml`) - Alerts on nightly workflow failures.
 9. **CodeQL** (`codeql.yml`) - GitHub code scanning.
+10. **Agentic Worker E2E** (`agentic-e2e.yml`, 01:15 UTC) - Regression guard for the agentic worker (`dw.agent`): boots the tavily agentic demo bundle, drives one Plan-Act-Observe turn over the WebChat DirectLine rail, and asserts the worker returns a real reply. Needs only an LLM key (the `DEEPSEEK_KEY` secret); no Redis — `dw.agent` falls back to in-memory state when `GREENTIC_AW_REDIS_URL` is unset.
 
 
 ## Running Tests
@@ -194,6 +195,7 @@ Full list of all secret env vars is in `.secrets-provider.example`.
 - `scripts/run_telemetry_e2e.sh` - Telemetry OTLP harness. Boots `fixtures/telemetry/otel-collector-file-export.yaml` in Docker, starts a dummy bundle with `TELEMETRY_EXPORT`/`OTLP_ENDPOINT`, asserts `resourceLogs` + `service.name` in the dump. Collector publishes on host `:14317`/`:14318` and the gateway on `:18080` to avoid colliding with a local demo/collector. Cleanup is scoped to the run's own `greentic-start` (matched by temp dir), so it won't kill an unrelated demo server.
 - `scripts/run_store_dual_publish_e2e.sh` - Store agentic-worker `publish -> install -> run` lifecycle. Spins up a throwaway docker network + Postgres + MinIO + the store image, plus a python3-stdlib mock admin registry (reachable via container DNS name on the shared docker network). Asserts the publish no-repack sha invariant, install-back byte-equality, run-from-store admin hand-off (one PUT, namespaced agent id), and the byo-required 409. Vendors a pre-built `fixtures/store-dual-publish/manifest.cbor` (the run endpoint decodes it with greentic-types; see that fixture's generation note below). SKIPS when the store image is not pullable.
 - `scripts/run_webchat_passthrough_e2e.sh` - WebChat DirectLine passthrough regression harness. Uses the `fixtures/packs/webchat-passthrough-probe` pack.
+- `scripts/run_agentic_e2e.sh` - Agentic worker (`dw.agent`) e2e. Fetches/uses the tavily agentic bundle, runs `gtc setup` + `gtc start`, drives one turn over the WebChat DirectLine rail (token → conversation → message → poll; reply may be plain text or an Adaptive Card), and asserts a non-empty reply. Env: `GREENTIC_LLM_API_KEY` (required — mapped from `DEEPSEEK_KEY` in CI), `TAVILY_API_KEY` (optional), `GREENTIC_AGENTIC_BUNDLE_SOURCE`, `GREENTIC_AGENT_TENANT`, `GREENTIC_AGENT_PROMPT`. No Redis. Cleanup trap kills `greentic-runner`.
 - `ci/run_actions.sh` - Runs nightly workflow locally via [nektos/act](https://github.com/nektos/act). Auto-installs `act` to `.bin/`. Resolves Docker host for both macOS (Docker Desktop) and Linux.
 
 ## Playwright sub-package
