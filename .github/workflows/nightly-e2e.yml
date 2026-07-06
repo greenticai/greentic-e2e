@@ -351,7 +351,10 @@ jobs:
           greentic-pack doctor "$WIZARD_PACK_TEST_DIR" \
             >"$WIZARD_E2E_ROOT/wizard-pack-doctor.log" 2>&1
 
-          test -s "$WIZARD_PACK_TEST_DIR/dist/pack.gtpack"
+          # Toolchain 1.1.2 names the artifact after the pack directory
+          # (dist/pack-under-test.gtpack), older releases used pack.gtpack —
+          # accept any non-empty .gtpack in dist/.
+          test -n "$(find "$WIZARD_PACK_TEST_DIR/dist" -name '*.gtpack' -size +1c 2>/dev/null | head -n 1)"
 
           grep -q 'component-adaptive-card' "$WIZARD_PACK_TEST_DIR/flows/main.ygtc"
           grep -q 'templates' "$WIZARD_PACK_TEST_DIR/flows/main.ygtc"
@@ -574,7 +577,11 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: wizard-e2e-${{ matrix.os }}-${{ matrix.arch }}
-          path: ${{ env.WIZARD_E2E_ROOT }}
+          # Exclude .greentic caches: their content-addressed paths contain
+          # ':' (sha256:...), which upload-artifact rejects outright.
+          path: |
+            ${{ env.WIZARD_E2E_ROOT }}
+            !${{ env.WIZARD_E2E_ROOT }}/**/.greentic/**
           include-hidden-files: true
           if-no-files-found: ignore
           retention-days: 7
