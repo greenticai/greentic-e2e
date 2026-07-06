@@ -259,6 +259,7 @@ jobs:
           TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_APP_ID: ${{ secrets.SLACK_APP_ID }}
+          SLACK_CONFIGURATION_REFRESH_TOKEN: ${{ secrets.SLACK_CONFIGURATION_REFRESH_TOKEN }}
           MS_BOT_APP_ID: ${{ secrets.MS_BOT_APP_ID }}
           MS_BOT_APP_PASSWORD: ${{ secrets.MS_BOT_APP_PASSWORD }}
           WEBEX_BOT_TOKEN: ${{ secrets.WEBEX_BOT_TOKEN }}
@@ -282,7 +283,10 @@ jobs:
               [[ -n "$TELEGRAM_BOT_TOKEN" ]] || { present=false; reason="TELEGRAM_BOT_TOKEN"; }
               ;;
             messaging-slack)
-              [[ -n "$SLACK_BOT_TOKEN" ]] || { present=false; reason="SLACK_BOT_TOKEN"; }
+              # The slack pack's setup now also requires a configuration
+              # refresh token (xoxe-1-...) alongside the access token.
+              [[ -n "$SLACK_BOT_TOKEN" && -n "$SLACK_CONFIGURATION_REFRESH_TOKEN" ]] \
+                || { present=false; reason="SLACK_BOT_TOKEN / SLACK_CONFIGURATION_REFRESH_TOKEN"; }
               ;;
             messaging-teams)
               [[ -n "$MS_BOT_APP_ID" && -n "$MS_BOT_APP_PASSWORD" ]] || { present=false; reason="MS_BOT_APP_ID / MS_BOT_APP_PASSWORD"; }
@@ -322,6 +326,7 @@ jobs:
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_APP_ID: ${{ secrets.SLACK_APP_ID }}
           SLACK_CONFIGURATION_TOKEN: ${{ secrets.SLACK_CONFIGURATION_TOKEN }}
+          SLACK_CONFIGURATION_REFRESH_TOKEN: ${{ secrets.SLACK_CONFIGURATION_REFRESH_TOKEN }}
           MS_BOT_APP_ID: ${{ secrets.MS_BOT_APP_ID }}
           MS_BOT_APP_PASSWORD: ${{ secrets.MS_BOT_APP_PASSWORD }}
           WEBEX_BOT_TOKEN: ${{ secrets.WEBEX_BOT_TOKEN }}

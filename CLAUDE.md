@@ -168,7 +168,7 @@ Exception: `events-timer` has no HTTP ingress (schedule-based); verified via log
 |----------|-----------------|
 | `messaging-dummy` | None |
 | `messaging-telegram` | `TELEGRAM_BOT_TOKEN` |
-| `messaging-slack` | `SLACK_BOT_TOKEN`, `SLACK_APP_ID` |
+| `messaging-slack` | `SLACK_BOT_TOKEN`, `SLACK_APP_ID`, `SLACK_CONFIGURATION_REFRESH_TOKEN` |
 | `messaging-teams` | `MS_BOT_APP_ID`, `MS_BOT_APP_PASSWORD` |
 | `messaging-webex` | `WEBEX_BOT_TOKEN` |
 | `messaging-whatsapp` | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` |
