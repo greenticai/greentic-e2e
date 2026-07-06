@@ -1,0 +1,66 @@
+name: Agentic Worker E2E
+
+# Regression guard for the agentic worker (dw.agent): install gtc, boot the
+# agentic demo bundle, drive one Plan-Act-Observe turn through POST /agent/chat,
+# and assert the worker returns a real reply. Fails if dw.agent stops working.
+
+on:
+  schedule:
+    - cron: '15 1 * * *'  # nightly, after the provider suite
+  workflow_dispatch:
+    inputs:
+      gtc_version:
+        description: 'gtc version to test (must carry dw.agent, >= 1.1.x)'
+        default: 'latest'
+        required: false
+      bundle_source:
+        description: 'URL of the agentic .gtbundle to test'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
+
+jobs:
+  agentic-worker:
+    name: Agentic Worker (dw.agent)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check required secret
+        run: |
+          if [ -z "${{ secrets.GREENTIC_LLM_API_KEY }}" ]; then
+            echo "::error::GREENTIC_LLM_API_KEY secret is not set — the agentic worker needs an LLM key to run."
+            echo "Add it in the greentic-e2e repo settings (Settings → Secrets → Actions)."
+            exit 1
+          fi
+
+      - name: Install gtc
+        run: |
+          cargo install cargo-binstall --locked || true
+          cargo binstall -y gtc --version "${GTC_VERSION}" || cargo binstall -y gtc
+
+      - name: Run agentic worker e2e
+        env:
+          GREENTIC_LLM_API_KEY: ${{ secrets.GREENTIC_LLM_API_KEY }}
+          GREENTIC_LLM_PROVIDER: ${{ vars.GREENTIC_LLM_PROVIDER || 'deepseek' }}
+          GREENTIC_LLM_MODEL: ${{ vars.GREENTIC_LLM_MODEL || 'deepseek-chat' }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          GREENTIC_AGENTIC_BUNDLE_SOURCE: ${{ github.event.inputs.bundle_source || vars.GREENTIC_AGENTIC_BUNDLE_SOURCE || '' }}
+          VERBOSE: 'true'
+        run: |
+          # No Redis: dw.agent falls back to in-memory state when
+          # GREENTIC_AW_REDIS_URL is unset.
+          args=()
+          if [ -n "${GREENTIC_AGENTIC_BUNDLE_SOURCE}" ]; then
+            args+=(--bundle-source "${GREENTIC_AGENTIC_BUNDLE_SOURCE}")
+          fi
+          ./scripts/run_agentic_e2e.sh "${args[@]}"

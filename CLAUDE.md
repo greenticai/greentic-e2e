@@ -9,6 +9,7 @@ End-to-end tests for the Greentic CLI (`gtc`). Two test suites run nightly via G
 1. **Nightly Install/Wizard** (`nightly-e2e.yml`, 00:00 UTC) - Tests `gtc install`, `gtc doctor`, and `gtc wizard` across 6 platform/arch combos (Linux x64/arm64, macOS arm64/x64, Windows x64/arm64). Uses `expect` scripts for interactive wizard testing.
 2. **Provider E2E** (`provider-e2e.yml`, 00:30 UTC) - Full provider lifecycle: bundle creation, setup, start, HTTP ingress verification, and shutdown. Tests all messaging and event providers.
 3. **Cloud Demo E2E** (`cloud-demo-e2e.yml`, 02:00 UTC) - Cloud demo lifecycle: `gtc wizard`, `gtc setup --non-interactive`, `gtc start --target <aws|azure|gcp>`, web UI verification, optional admin tunnel verification, and `gtc stop --destroy`.
+4. **Agentic Worker E2E** (`agentic-e2e.yml`, 01:15 UTC) - Regression guard for the agentic worker (`dw.agent`): boots the agentic demo bundle, drives one Plan-Act-Observe turn via `POST /agent/chat`, and asserts the worker returns a real reply. Needs an LLM key; no Redis (`dw.agent` falls back to in-memory state when `GREENTIC_AW_REDIS_URL` is unset).
 
 ## Running Tests
 
@@ -62,6 +63,30 @@ export GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND='s3'
 
 Requires `gtc` CLI installed (`cargo binstall gtc`). For providers with secrets, copy `.secrets-provider.example` to `.secrets-provider` and fill in values.
 
+### Local Agentic Worker Test
+
+```bash
+# Boot the agentic demo, drive one dw.agent turn, assert a real reply.
+# Only needs an LLM key — no Redis (in-memory agentic state fallback).
+GREENTIC_LLM_API_KEY=sk-... \
+GREENTIC_LLM_PROVIDER=deepseek \
+GREENTIC_LLM_MODEL=deepseek-chat \
+  ./scripts/run_agentic_e2e.sh
+
+# Against a local bundle instead of the released one
+GREENTIC_LLM_API_KEY=sk-... ./scripts/run_agentic_e2e.sh --bundle /path/to/agentic-bundle
+
+# Validate the flow without gtc
+./scripts/run_agentic_e2e.sh --dry-run
+
+# Options: --prompt "..." --tenant <t> --flow-id <f> --keep-running --verbose
+```
+
+Requires a `gtc` that carries `dw.agent` (>= 1.1.x toolchain). Optional `TAVILY_API_KEY`
+when the bundle's worker uses the Tavily tool. The setup-answers fixture
+(`fixtures/setup-answers/agentic-research-tavily.json`) is a template — confirm the
+exact keys against the released bundle with `gtc setup --dry-run --emit-answers`.
+
 ### Nightly Tests Locally (Docker/Act)
 
 ```bash
@@ -86,6 +111,16 @@ gtc wizard -> gtc setup --non-interactive -> gtc start <bundle_dir> --target <aw
 -> optional gtc admin tunnel --target aws -> GET /admin/v1/health
 -> add/remove admin CN -> gtc stop --destroy
 ```
+
+Agentic worker flow:
+
+```
+gtc setup --non-interactive --answers <file> -> gtc start <bundle> --cloudflared off --ngrok off
+-> wait for gateway -> POST /agent/chat {"text": "...", "tenant": "..."}
+-> assert HTTP 200 + non-empty replies[].text -> stop
+```
+
+`POST /agent/chat` is the synchronous agentic endpoint (`AgentChatRequest {text, tenant?, conversation_id?, user_id?, flow_id?}` -> `AgentChatResponse {replies: [{text}]}`); a non-empty reply proves the full `dw.agent` Plan-Act-Observe loop ran.
 
 Nightly/manual workflow keeps admin checks opt-in until the released `gtc` artifact includes `gtc admin tunnel`.
 For local runs only `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY` are required unless you want to override the default region/backend values.
@@ -168,6 +203,7 @@ Full list of all secret env vars is in `.secrets-provider.example`.
 - `scripts/run_provider_e2e.sh` - Main local test runner. Uses Perl for cross-platform timeout handling. Cleanup trap kills `greentic-runner` and `nats-server` processes.
 - `scripts/run_cloud_demo_e2e.sh` - Cloud demo lifecycle harness for AWS, Azure, and GCP. Verifies published `greentic-demo` release assets, web UI route, and optional admin tunnel flow for AWS only.
   Defaults: AWS `AWS_REGION/AWS_DEFAULT_REGION=eu-north-1`, AWS backend `s3`, Azure location `westeurope`, Azure backend `azurerm`, GCP region `us-central1`, GCP backend `gcs`.
+- `scripts/run_agentic_e2e.sh` - Agentic worker (`dw.agent`) e2e. Fetches/uses an agentic bundle, runs setup + start, drives one turn via `POST /agent/chat`, and asserts a non-empty reply. Env: `GREENTIC_LLM_API_KEY` (required), `TAVILY_API_KEY` (optional), `GREENTIC_AGENTIC_BUNDLE_SOURCE`, `GREENTIC_AGENT_TENANT`, `GREENTIC_AGENT_PROMPT`. Cleanup trap kills `greentic-runner`.
 - `ci/run_actions.sh` - Runs nightly workflow locally via [nektos/act](https://github.com/nektos/act). Auto-installs `act` to `.bin/`. Resolves Docker host for both macOS (Docker Desktop) and Linux.
 
 ## Playwright sub-package

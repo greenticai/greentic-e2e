@@ -15,12 +15,21 @@ This repository automates the validation of `gtc` installation and initializatio
 4.  **Artifact Verification**: Checks if libraries, commercial components, and documentation are correctly placed in the `~/.greentic` directory.
 5.  **Provider Lifecycle**: Verifies `wizard -> setup -> start -> ingress -> stop` for provider bundles.
 6.  **Cloud Demo Lifecycle**: Work in progress harness for `wizard -> setup --no-ui -> start --target <aws|azure|gcp> -> web UI -> optional admin tunnel -> stop --destroy`.
+7.  **Agentic Worker (`dw.agent`)**: Boots the agentic demo bundle, drives one Plan-Act-Observe turn via `POST /agent/chat`, and asserts the worker returns a real reply. Regression guard for the whole agentic runtime chain. Needs an LLM key; no Redis required.
 
 ## Local Scripts
 
 Provider lifecycle:
 ```bash
 ./scripts/run_provider_e2e.sh
+```
+
+Agentic worker (`dw.agent`):
+```bash
+GREENTIC_LLM_API_KEY=sk-... \
+GREENTIC_LLM_PROVIDER=deepseek \
+GREENTIC_LLM_MODEL=deepseek-chat \
+  ./scripts/run_agentic_e2e.sh
 ```
 
 AWS cloud demo lifecycle:
