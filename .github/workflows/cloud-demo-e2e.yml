@@ -56,42 +56,32 @@ jobs:
           [[ -n "${AWS_REGION}" ]] || { echo "Missing AWS_REGION"; exit 1; }
           [[ -n "${AWS_DEFAULT_REGION}" ]] || { echo "Missing AWS_DEFAULT_REGION"; exit 1; }
 
-      - name: Bootstrap toolchain
+      - name: Verify AWS credentials can deploy
         shell: bash
         run: |
           set -euo pipefail
-          if ! command -v rustup >/dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95.0
-            export PATH="$HOME/.cargo/bin:$PATH"
+          # Fail fast with a readable message instead of an opaque
+          # `terraform apply failed with exit 1` three minutes in. The
+          # deployer's Terraform starts with EC2 read-only data sources, so
+          # a credential that can't DescribeAvailabilityZones can't deploy.
+          identity="$(aws sts get-caller-identity --query Arn --output text)"
+          echo "AWS identity: ${identity}"
+          if ! aws ec2 describe-availability-zones --max-items 1 >/dev/null 2>&1; then
+            echo "::error::AWS credentials (${identity}) lack EC2 permissions" \
+              "(ec2:DescribeAvailabilityZones denied). The repo secrets point at" \
+              "a non-deploy identity — set deploy-capable AWS_ACCESS_KEY_ID /" \
+              "AWS_SECRET_ACCESS_KEY repo secrets (or switch this job to OIDC)."
+            exit 1
           fi
-          rustup toolchain install 1.95.0 --profile minimal
-          rustup default 1.95.0
 
-      - name: Install cargo-binstall
-        shell: bash
-        run: |
-          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+      - name: Set up Greentic toolchain
+        uses: ./.github/actions/setup-greentic
+        with:
+          gtc-version: ${{ env.GTC_VERSION }}
 
-      - name: Install gtc CLI
+      - name: Verify deployer version
         shell: bash
-        env:
-          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
-        run: |
-          if [[ -z "${GTC_VERSION}" || "${GTC_VERSION}" == "latest" ]]; then
-            cargo binstall -y gtc
-          else
-            cargo binstall -y "gtc@${GTC_VERSION}"
-          fi
-          gtc --version
-          gtc install --channel stable
-          # gtc:stable (v1.0.23+) now passes `--bundle-root` to `greentic-deployer
-          # <target> apply`, which only landed in greentic-deployer 0.5.11. The
-          # gtc:stable toolchain manifest still pins an older 0.4.x deployer, so
-          # without this override the apply step fails with
-          # "error: unexpected argument '--bundle-root' found".
-          # Drop this once gtc:stable is bumped to a deployer ≥ 0.5.11.
-          cargo binstall -y --force greentic-deployer@0.5.11
-          greentic-deployer --version
+        run: greentic-deployer --version
 
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@v3

@@ -43,10 +43,14 @@ install_dev() {
   "$HOME/.cargo/bin/gtc-dev" --version
 }
 
+# Pinned stable toolchain release; override with GTC_RELEASE. Keep in sync
+# with the default in .github/actions/setup-greentic/action.yml.
+GTC_RELEASE="${GTC_RELEASE:-1.1.2}"
+
 run_gtc_install() {
   local bin="$1"
-  echo "[bootstrap] running '$bin install --force --channel stable'"
-  "$bin" install --force --channel stable
+  echo "[bootstrap] running '$bin install --force --release ${GTC_RELEASE}'"
+  "$bin" install --force --release "${GTC_RELEASE}"
 }
 
 # Companion-binary symlinking for the dev channel.

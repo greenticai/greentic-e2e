@@ -27,6 +27,10 @@
       }
     },
     {
+      "action": "delete-flow",
+      "flow": "flows/qa.ygtc"
+    },
+    {
       "action": "add-flow",
       "flow": "flows/qa.ygtc",
       "flow_id": "qa",

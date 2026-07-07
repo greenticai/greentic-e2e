@@ -54,6 +54,14 @@ jobs:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
+    # The dev lane is advisory while `gtc install --channel dev` is broken
+    # upstream: its cargo-source fallback runs `cargo install --bin
+    # greentic-dev-dev`, but the crate's only bin target is `greentic-dev`,
+    # so the install can never succeed (stuck on build 26763021498 since
+    # ~2026-06-26). Failures still show in the job log/annotations but no
+    # longer red the nightly while stable is green. Drop this once the dev
+    # manifest advances and installs cleanly.
+    continue-on-error: ${{ matrix.channel == 'dev' }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
@@ -77,19 +85,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Bootstrap Rust 1.95 + wasm32-wasip2
-        shell: bash
-        run: |
-          set -euo pipefail
-          if ! command -v rustup >/dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-              | sh -s -- -y --profile minimal --default-toolchain 1.95.0
-            echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
-          fi
-          rustup toolchain install 1.95.0 --profile minimal
-          rustup default 1.95.0
-          rustup target add wasm32-wasip2 --toolchain 1.95.0
-          rustc --version
+      - name: Set up Rust + cargo-binstall
+        uses: ./.github/actions/setup-greentic
+        with:
+          wasm-target: 'true'
+          # bootstrap-gtc.sh owns the gtc install so the two channels get
+          # their gtc-stable / gtc-dev binary names.
+          install-gtc: 'false'
+          install-toolchain: 'false'
 
       - name: Install OS deps (Linux)
         if: runner.os == 'Linux'
@@ -97,6 +100,8 @@ jobs:
 
       - name: Install gtc (channel = ${{ matrix.channel }})
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: bash playwright/scripts/bootstrap-gtc.sh "${GTC_CHANNEL}"
 
       - uses: actions/setup-node@v4

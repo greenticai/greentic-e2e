@@ -72,6 +72,10 @@ export GREENTIC_DEPLOY_TERRAFORM_VAR_REMOTE_STATE_BACKEND='s3'
 
 Requires `gtc` CLI installed (`cargo binstall gtc`). For providers with secrets, copy `.secrets-provider.example` to `.secrets-provider` and fill in values.
 
+### CI toolchain bootstrap
+
+All workflows share `.github/actions/setup-greentic` (Rust pin, cargo-binstall with authenticated GitHub API lookups, gtc CLI, `gtc install --release <pin>`). The pinned Greentic toolchain release lives in that action's `gtc-release` default (and is mirrored in `nightly-e2e.yml`'s `GTC_RELEASE` env and `playwright/scripts/bootstrap-gtc.sh`) — bump those together to roll every workflow forward.
+
 ### Nightly Tests Locally (Docker/Act)
 
 ```bash
@@ -165,7 +169,7 @@ Exception: `events-timer` has no HTTP ingress (schedule-based); verified via log
 |----------|-----------------|
 | `messaging-dummy` | None |
 | `messaging-telegram` | `TELEGRAM_BOT_TOKEN` |
-| `messaging-slack` | `SLACK_BOT_TOKEN`, `SLACK_APP_ID` |
+| `messaging-slack` | `SLACK_BOT_TOKEN`, `SLACK_APP_ID`, `SLACK_CONFIGURATION_REFRESH_TOKEN` |
 | `messaging-teams` | `MS_BOT_APP_ID`, `MS_BOT_APP_PASSWORD` |
 | `messaging-webex` | `WEBEX_BOT_TOKEN` |
 | `messaging-whatsapp` | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` |

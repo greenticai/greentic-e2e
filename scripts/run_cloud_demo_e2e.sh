@@ -405,7 +405,16 @@ log "Staged ${DEPLOYER_DIR}/${TARGET}.gtpack from ${DEPLOYER_PACK_REF}"
 
 log ""
 log "Step 3: start ${TARGET} deploy"
-"${GTC_CMD}" start ./cloud-deploy-demo-bundle --target "${TARGET}" | tee "${START_LOG}"
+if ! "${GTC_CMD}" start ./cloud-deploy-demo-bundle --target "${TARGET}" | tee "${START_LOG}"; then
+  # Surface the real terraform error in the job output — without this the
+  # only visible message is "terraform apply failed with exit 1" and the
+  # root cause hides inside the uploaded artifact.
+  while IFS= read -r tf_log; do
+    echo "===== ${tf_log} =====" >&2
+    tail -n 40 "${tf_log}" >&2
+  done < <(find "${WORK_DIR}/.greentic/deploy" \( -name 'terraform-apply.stderr.log' -o -name 'terraform-plan.stderr.log' \) -type f 2>/dev/null)
+  die "gtc start --target ${TARGET} failed"
+fi
 
 case "${TARGET}" in
   aws)

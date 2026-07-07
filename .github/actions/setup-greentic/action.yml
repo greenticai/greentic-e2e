@@ -1,0 +1,101 @@
+name: Setup Greentic
+description: >-
+  Shared toolchain bootstrap for the e2e workflows: pins Rust, installs
+  cargo-binstall, installs the gtc CLI, and installs the pinned Greentic
+  toolchain release. Every step exports GITHUB_TOKEN so cargo-binstall's
+  api.github.com release lookups are authenticated — unauthenticated calls
+  from shared runner IPs hit 403 rate limits, fall back to multi-minute
+  source builds, and have timed out whole matrix jobs.
+
+inputs:
+  rust-version:
+    description: Rust toolchain version to pin
+    default: '1.95.0'
+  wasm-target:
+    description: Also install the wasm32-wasip2 target
+    default: 'false'
+  gtc-version:
+    description: gtc crate version to install ('latest' = unpinned)
+    default: 'latest'
+  gtc-release:
+    description: >-
+      Pinned Greentic toolchain release passed to `gtc install --release`.
+      Bump here to roll every workflow forward at once.
+    default: '1.1.2'
+  install-gtc:
+    description: Install the gtc CLI via cargo-binstall
+    default: 'true'
+  install-toolchain:
+    description: Run `gtc install --release <gtc-release>` after installing the CLI
+    default: 'true'
+
+runs:
+  using: composite
+  steps:
+    - name: Bootstrap Rust ${{ inputs.rust-version }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        if ! command -v rustup >/dev/null 2>&1; then
+          if [[ "${RUNNER_OS}" == "Windows" ]]; then
+            curl -fsSL -o rustup-init.exe https://win.rustup.rs/x86_64
+            ./rustup-init.exe -y --profile minimal --default-toolchain "${{ inputs.rust-version }}"
+          else
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
+              | sh -s -- -y --profile minimal --default-toolchain "${{ inputs.rust-version }}"
+          fi
+        fi
+        export PATH="$HOME/.cargo/bin:$PATH"
+        echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+        rustup toolchain install "${{ inputs.rust-version }}" --profile minimal
+        rustup default "${{ inputs.rust-version }}"
+        if [[ "${{ inputs.wasm-target }}" == "true" ]]; then
+          rustup target add wasm32-wasip2 --toolchain "${{ inputs.rust-version }}"
+        fi
+        rustc --version
+        cargo --version
+
+    - name: Install cargo-binstall
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        set -euo pipefail
+        export PATH="$HOME/.cargo/bin:$PATH"
+        if command -v cargo-binstall >/dev/null 2>&1; then
+          cargo binstall -V
+          exit 0
+        fi
+        if [[ "${RUNNER_OS}" == "Windows" ]]; then
+          cargo install cargo-binstall --locked
+        else
+          curl -L --proto '=https' --tlsv1.2 -sSf \
+            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+        fi
+
+    - name: Install gtc CLI
+      if: inputs.install-gtc == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+      run: |
+        set -euo pipefail
+        export PATH="$HOME/.cargo/bin:$PATH"
+        if [[ -z "${{ inputs.gtc-version }}" || "${{ inputs.gtc-version }}" == "latest" ]]; then
+          cargo binstall -y gtc
+        else
+          cargo binstall -y "gtc@${{ inputs.gtc-version }}"
+        fi
+        gtc --version
+
+    - name: Install Greentic toolchain (release ${{ inputs.gtc-release }})
+      if: inputs.install-toolchain == 'true'
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
+        CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
+      run: |
+        set -euo pipefail
+        export PATH="$HOME/.cargo/bin:$PATH"
+        gtc install --release "${{ inputs.gtc-release }}"

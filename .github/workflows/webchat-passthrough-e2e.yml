@@ -52,48 +52,19 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq squashfs-tools jq lsof curl
 
-      - name: Bootstrap Rust toolchain
-        shell: bash
-        run: |
-          set -euo pipefail
-          # GHA ubuntu-24.04 runners ship rustup with `stable` (currently
-          # 1.94.1) pre-installed, so a `command -v rustup` guard would
-          # skip our install and leave 1.94 active. greentic-interfaces
-          # 0.5.0 requires 1.95, so pin explicitly regardless of whether
-          # rustup is pre-installed.
-          if ! command -v rustup >/dev/null 2>&1; then
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-              | sh -s -- -y --profile minimal --default-toolchain 1.95.0
-          fi
-          export PATH="$HOME/.cargo/bin:$PATH"
-          rustup toolchain install 1.95.0 --profile minimal
-          rustup default 1.95.0
-          rustc --version
-          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Set up Greentic toolchain
+        uses: ./.github/actions/setup-greentic
+        with:
+          gtc-version: ${{ env.GTC_VERSION }}
 
-      - name: Install cargo-binstall + cargo-component
+      - name: Install companion CLIs
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           export PATH="$HOME/.cargo/bin:$PATH"
-          curl -L --proto '=https' --tlsv1.2 -sSf \
-            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
-            | bash
-          cargo binstall -y cargo-component
-
-      - name: Install Greentic CLIs
-        shell: bash
-        run: |
-          set -euo pipefail
-          export PATH="$HOME/.cargo/bin:$PATH"
-          if [[ -z "${GTC_VERSION}" || "${GTC_VERSION}" == "latest" ]]; then
-            cargo binstall -y gtc
-          else
-            cargo binstall -y "gtc@${GTC_VERSION}"
-          fi
-          cargo binstall -y greentic-start greentic-secrets greentic-pack
-          gtc --version
-          gtc install --channel stable
+          cargo binstall -y cargo-component greentic-start greentic-secrets greentic-pack
 
       - name: Run WebChat passthrough e2e
         shell: bash
