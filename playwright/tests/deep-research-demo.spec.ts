@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import { test, expect } from "./_fixtures/gtc-demo";
 import { WebChat } from "./_fixtures/webchat-page";
+import { checkDeepResearchLlm } from "./_fixtures/llm-preflight";
 
 const ERROR_MARKERS = /error|exception|panic|stack trace/i;
 // Patterns that indicate the LLM call itself failed in the runner — fail
@@ -135,10 +136,12 @@ test.describe("deep-research-demo (PR-1 walking skeleton)", () => {
     page,
     gtcDemo,
   }) => {
-    test.skip(
-      !process.env.DEEPSEEK_KEY && process.env.LOCAL_LLM !== "1",
-      "needs DEEPSEEK_KEY or LOCAL_LLM=1 (with local Ollama running gemma3:latest)",
-    );
+    // Validate the backend actually answers before paying for a full
+    // gtc setup + browser flow. A present-but-dead/expired/misrouted key
+    // (see the KNOWN LIMITATION note above) should skip here, not fail
+    // 3 minutes into the reply poll below.
+    const preflight = await checkDeepResearchLlm();
+    test.skip(!preflight.ok, !preflight.ok ? preflight.reason : undefined);
     const demo = await gtcDemo({ name: "deep-research-demo" });
     const chat = new WebChat(page, demo.demoUrl);
 

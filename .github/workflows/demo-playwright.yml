@@ -68,20 +68,6 @@ jobs:
     env:
       GTC_CHANNEL: ${{ matrix.channel }}
       DEMO_FILTER: ${{ inputs.demo_filter || 'all' }}
-    services:
-      # deep-research-demo's state-redis backend expects redis://127.0.0.1:6379.
-      # Without this its LLM test fails at startup once DEEPSEEK_KEY is set
-      # (the test runs instead of soft-skipping). Linux-only matrix, so the
-      # service container maps to localhost on the runner.
-      redis:
-        image: redis:7
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
