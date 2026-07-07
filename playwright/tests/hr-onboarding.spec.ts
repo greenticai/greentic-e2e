@@ -1,7 +1,7 @@
 import { test, expect } from "./_fixtures/gtc-demo";
 import { WebChat } from "./_fixtures/webchat-page";
 
-const ERROR_MARKERS = /error|exception|panic|stack trace/i;
+const ERROR_MARKERS = /error|exception|panic|stack trace|something went wrong/i;
 
 // Welcome-card title resolved from i18n
 // (card.welcome_card body header).

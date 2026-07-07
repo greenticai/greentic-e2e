@@ -1,7 +1,7 @@
 import { test, expect } from "./_fixtures/gtc-demo";
 import { WebChat } from "./_fixtures/webchat-page";
 
-const ERROR_MARKERS = /error|exception|panic|stack trace/i;
+const ERROR_MARKERS = /error|exception|panic|stack trace|something went wrong/i;
 
 // Welcome card title text (rendered on autoStart from
 // flows/main entrypoint=show_welcome).

@@ -15,7 +15,7 @@ const FAST2FLOW_ENV = { FAST2FLOW_MIN_CONFIDENCE: "0.05" };
 // ABSENCE proves a dispatch happened. The card text uses a curly apostrophe
 // (U+2019) — "I’m not sure…" — so match straight OR curly (or none).
 const NO_DISPATCH_FALLBACK = /I['’]?m not sure what you meant/i;
-const ERROR_MARKERS = /error|exception|panic|stack trace/i;
+const ERROR_MARKERS = /error|exception|panic|stack trace|something went wrong/i;
 
 const demoOpts = { name: "pet-daycare-demo", envOverrides: FAST2FLOW_ENV } as const;
 

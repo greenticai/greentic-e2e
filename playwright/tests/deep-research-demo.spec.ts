@@ -3,7 +3,7 @@ import { test, expect } from "./_fixtures/gtc-demo";
 import { WebChat } from "./_fixtures/webchat-page";
 import { checkDeepResearchLlm } from "./_fixtures/llm-preflight";
 
-const ERROR_MARKERS = /error|exception|panic|stack trace/i;
+const ERROR_MARKERS = /error|exception|panic|stack trace|something went wrong/i;
 // Patterns that indicate the LLM call itself failed in the runner — fail
 // the test immediately with the actual error instead of waiting out the
 // 3-minute reply poll.
