@@ -1,0 +1,27 @@
+{
+  "greentic_setup_version": "1.0.0",
+  "env": "dev",
+  "bundle_source": ".",
+  "platform_setup": {
+    "deployment_targets": [],
+    "static_routes": {
+      "default_route_prefix_policy": "pack_declared",
+      "public_surface_policy": "disabled",
+      "public_web_enabled": false,
+      "tenant_path_policy": "pack_declared"
+    }
+  },
+  "setup_answers": {
+    "messaging-webchat-gui": {
+      "base_url": "http://localhost:8080",
+      "jwt_signing_key": "7987810ce9ab713543fa9a478082e9e893742f93ae514c8fa3b9795f2302b92e",
+      "mode": "local_queue",
+      "public_base_url": "http://localhost:8080",
+      "route": "webchat",
+      "tenant_channel_id": "demo-default"
+    },
+    "state-memory": {}
+  },
+  "tenant": "demo",
+  "team": "default"
+}

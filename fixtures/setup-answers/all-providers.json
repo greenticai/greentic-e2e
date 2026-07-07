@@ -17,13 +17,17 @@
     "api_base_url": "https://slack.com/api",
     "slack_bot_token": "${SLACK_BOT_TOKEN}",
     "slack_app_id": "${SLACK_APP_ID}",
-    "slack_configuration_token": "${SLACK_CONFIGURATION_TOKEN}"
+    "slack_configuration_token": "${SLACK_CONFIGURATION_TOKEN}",
+    "slack_signing_secret": "dummy_slack_signing_secret_e2e_only_32chars_minimum_length_xxxxxxxx"
   },
   "messaging-teams": {
     "enabled": true,
     "public_base_url": "${PUBLIC_BASE_URL}",
     "ms_bot_app_id": "${MS_BOT_APP_ID}",
-    "ms_bot_app_password": "${MS_BOT_APP_PASSWORD}"
+    "ms_bot_app_password": "${MS_BOT_APP_PASSWORD}",
+    "ms_graph_client_id": "00000000-0000-0000-0000-000000000000",
+    "ms_graph_client_secret": "dummy_ms_graph_client_secret_e2e_only_32chars_minimum_length_xxxxxxxx",
+    "ms_graph_refresh_token": "dummy_ms_graph_refresh_token_e2e_only_32chars_minimum_length_xxxxxxxx"
   },
   "messaging-webex": {
     "enabled": true,

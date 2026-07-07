@@ -25,6 +25,7 @@ export default defineConfig({
     "deep-research-demo.spec.ts",
     "redbutton-demo.spec.ts",
     "telco-x-demo.spec.ts",
+    "pet-daycare-demo.spec.ts",
   ],
   // Serialize tests: greentic-start does not expose --port and binds the runner
   // to default 8080, so two concurrent demos would collide. Tests are short

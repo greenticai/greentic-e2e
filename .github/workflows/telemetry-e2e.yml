@@ -1,0 +1,86 @@
+name: Telemetry E2E
+
+on:
+  schedule:
+    - cron: '0 1 * * *'
+  workflow_dispatch:
+    inputs:
+      gtc_version:
+        description: 'gtc version to test'
+        default: 'latest'
+        required: false
+      protocol:
+        description: 'OTLP transport'
+        default: 'grpc'
+        required: false
+        type: choice
+        options: [grpc, http]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
+  OTLP_PROTOCOL: ${{ github.event.inputs.protocol || 'grpc' }}
+
+jobs:
+  telemetry-otlp:
+    name: OTLP logs export
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bootstrap toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! command -v rustup >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain 1.95.0
+            export PATH="$HOME/.cargo/bin:$PATH"
+          fi
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+
+      - name: Install cargo-binstall
+        shell: bash
+        run: |
+          curl -L --proto '=https' --tlsv1.2 -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+
+      - name: Install gtc CLI
+        shell: bash
+        env:
+          CARGO_NET_GIT_FETCH_WITH_CLI: "true"
+        run: |
+          if [[ -z "${GTC_VERSION}" || "${GTC_VERSION}" == "latest" ]]; then
+            cargo binstall -y gtc
+          else
+            cargo binstall -y "gtc@${GTC_VERSION}"
+          fi
+          gtc --version
+          gtc install --channel stable
+
+      - name: Run telemetry E2E
+        shell: bash
+        env:
+          WORK_DIR: ${{ runner.temp }}/telemetry-e2e
+        run: |
+          set -euo pipefail
+          mkdir -p "${WORK_DIR}"
+          KEEP_RUNNING=false ./scripts/run_telemetry_e2e.sh \
+            --protocol "${OTLP_PROTOCOL}" \
+            --verbose 2>&1 | tee "${WORK_DIR}/telemetry-e2e.log"
+
+      - name: Upload telemetry logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: telemetry-e2e-logs
+          path: ${{ runner.temp }}/telemetry-e2e
+          include-hidden-files: true
+          if-no-files-found: ignore

@@ -2,15 +2,9 @@
 # playwright/scripts/bootstrap-gtc.sh
 # Install gtc per channel for the Playwright e2e suite.
 # Usage: bootstrap-gtc.sh stable|dev|both
-#
-# The "stable" channel pins to a specific toolchain release via
-# `gtc install --force --release ${GTC_RELEASE}`. We can't rely on the
-# stable cargo binstall channel alone because the underlying toolchain
-# release context can drift behind the binary version.
 set -euo pipefail
 
 channel="${1:?usage: bootstrap-gtc.sh stable|dev|both}"
-GTC_RELEASE="${GTC_RELEASE:-1.0.18}"
 
 ensure_rust() {
   if ! command -v cargo >/dev/null 2>&1; then
@@ -51,8 +45,8 @@ install_dev() {
 
 run_gtc_install() {
   local bin="$1"
-  echo "[bootstrap] running '$bin install --force --release $GTC_RELEASE'"
-  "$bin" install --force --release "$GTC_RELEASE"
+  echo "[bootstrap] running '$bin install --force --channel stable'"
+  "$bin" install --force --channel stable
 }
 
 # Companion-binary symlinking for the dev channel.
@@ -72,8 +66,8 @@ run_gtc_install() {
 #    playwright/tests/_fixtures/gtc-demo.ts.
 #    Fix: symlink `<name> → <name>-dev`.
 #
-# Stable is unaffected — `gtc install --release` puts canonical names on
-# disk and Playwright's spawn calls resolve them directly.
+# Stable is unaffected — `gtc install --channel stable` puts canonical names
+# on disk and Playwright's spawn calls resolve them directly.
 link_dev_companions() {
   local bin_dir="$HOME/.cargo/bin"
   local companions=(
@@ -115,13 +109,13 @@ ensure_rust
 # dist-pack step with the symlink in place.
 run_gtc_install_dev() {
   local bin="$1"
-  echo "[bootstrap] running '$bin install' (first pass — companions)"
+  echo "[bootstrap] running '$bin install --channel dev' (first pass — companions)"
   set +e
-  "$bin" install
+  "$bin" install --channel dev
   set -e
   link_dev_companions
-  echo "[bootstrap] running '$bin install' (second pass — dist pack)"
-  "$bin" install
+  echo "[bootstrap] running '$bin install --channel dev' (second pass — dist pack)"
+  "$bin" install --channel dev
 }
 
 case "$channel" in

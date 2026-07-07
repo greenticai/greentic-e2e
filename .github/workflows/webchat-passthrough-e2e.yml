@@ -93,7 +93,7 @@ jobs:
           fi
           cargo binstall -y greentic-start greentic-secrets greentic-pack
           gtc --version
-          gtc install
+          gtc install --channel stable
 
       - name: Run WebChat passthrough e2e
         shell: bash

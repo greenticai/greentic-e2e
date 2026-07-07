@@ -22,30 +22,58 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Build the channel matrix from the workflow_dispatch `gtc_channel` input so a
+  # manual run can target a single channel (e.g. "stable" -> stable-linux only).
+  # Scheduled runs (no input) fall back to "both". stable-macos is intentionally
+  # absent because `gtc install` falls back to `greentic-setup@0.5.1` on macOS
+  # (Maarten's Fix 2 `--non-interactive` only ships in 0.5.2 and the macOS
+  # aarch64 artifact for 0.5.2 is missing/broken in the greentic-setup release).
+  # Restore the cell once the upstream artifact is published. See PR-1 item #6.
+  plan:
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        shell: bash
+        env:
+          REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.gtc_channel || 'both' }}
+        run: |
+          set -euo pipefail
+          stable='{"label":"stable-linux","runner":"ubuntu-24.04","channel":"stable"}'
+          dev='{"label":"dev-linux","runner":"ubuntu-24.04","channel":"dev"}'
+          case "$REQUESTED" in
+            stable) include="[$stable]" ;;
+            dev)    include="[$dev]" ;;
+            *)      include="[$stable,$dev]" ;;
+          esac
+          echo "matrix={\"include\":$include}" >> "$GITHUB_OUTPUT"
+
   e2e:
+    needs: plan
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - label: stable-linux
-            runner: ubuntu-24.04
-            channel: stable
-          - label: dev-linux
-            runner: ubuntu-24.04
-            channel: dev
-          # stable-macos is intentionally dropped from PR-1 matrix because
-          # `gtc install` falls back to `greentic-setup@0.5.1` on macOS
-          # (Maarten's Fix 2 `--non-interactive` only ships in 0.5.2 and
-          # the macOS aarch64 artifact for 0.5.2 is missing/broken in
-          # the GitHub release for the greentic-setup repo). Restore the
-          # cell once the upstream artifact is published. See PR-1
-          # punch-list item #6.
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
       GTC_CHANNEL: ${{ matrix.channel }}
       DEMO_FILTER: ${{ inputs.demo_filter || 'all' }}
+    services:
+      # deep-research-demo's state-redis backend expects redis://127.0.0.1:6379.
+      # Without this its LLM test fails at startup once DEEPSEEK_KEY is set
+      # (the test runs instead of soft-skipping). Linux-only matrix, so the
+      # service container maps to localhost on the runner.
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -90,8 +118,12 @@ jobs:
         env:
           GTC_BIN: gtc-${{ matrix.channel }}
           DEMO_FILTER: ${{ env.DEMO_FILTER }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           WEATHER_API_KEY: ${{ secrets.WEATHER_API_KEY }}
+          # DeepSeek backs every LLM-based test (pet-daycare fast2flow tier,
+          # deep-research, helpdesk-itsm). When unset they soft-skip. DeepSeek
+          # is a native greentic-llm provider (pet-daycare's fast2flow tier) and
+          # an OpenAI-compatible endpoint (deep-research/helpdesk component-llm).
+          DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
         run: npx playwright test --project="${GTC_CHANNEL}"
 
       - name: Upload Playwright report

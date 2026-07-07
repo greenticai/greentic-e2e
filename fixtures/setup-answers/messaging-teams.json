@@ -4,6 +4,9 @@
     "public_base_url": "${PUBLIC_BASE_URL}",
     "ms_bot_app_id": "${MS_BOT_APP_ID}",
     "ms_bot_app_password": "${MS_BOT_APP_PASSWORD}",
+    "ms_graph_client_id": "00000000-0000-0000-0000-000000000000",
+    "ms_graph_client_secret": "dummy_ms_graph_client_secret_e2e_only_32chars_minimum_length_xxxxxxxx",
+    "ms_graph_refresh_token": "dummy_ms_graph_refresh_token_e2e_only_32chars_minimum_length_xxxxxxxx",
     "team_id": "",
     "channel_id": ""
   }
