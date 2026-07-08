@@ -1,6 +1,7 @@
 import type { Locator } from "@playwright/test";
 import { test, expect } from "./_fixtures/gtc-demo";
 import { WebChat } from "./_fixtures/webchat-page";
+import { checkWeatherApiAvailable } from "./_fixtures/weather-preflight";
 
 const ERROR_MARKERS = /error|exception|panic|stack trace|something went wrong/i;
 const CAPITAL_CITIES: Array<{ city: string; country: string }> = [
@@ -14,6 +15,14 @@ const CAPITAL_CITIES: Array<{ city: string; country: string }> = [
 
 test.describe("weather-mcp-demo", () => {
   test("smoke: chat loads, connects, accepts user input", async ({ page, gtcDemo }) => {
+    // Only ping when a key is configured — an absent key is a config problem
+    // gtcDemo already hard-fails on in CI (see WEATHER_API_KEY handling in
+    // gtc-demo.ts); this check is specifically for "key is fine, service
+    // itself is down" (503, timeout, DNS failure), which should skip, not fail.
+    if (process.env.WEATHER_API_KEY?.trim()) {
+      const preflight = await checkWeatherApiAvailable();
+      test.skip(!preflight.ok, !preflight.ok ? preflight.reason : undefined);
+    }
     const demo = await gtcDemo({ name: "weather-mcp-demo" });
     const chat = new WebChat(page, demo.demoUrl);
 
@@ -37,6 +46,11 @@ test.describe("weather-mcp-demo", () => {
   test(
     "functional: current weather and forecast use random cities from the capital collection",
     async ({ page, gtcDemo }) => {
+      // See the smoke test above for why this is gated on a key being present.
+      if (process.env.WEATHER_API_KEY?.trim()) {
+        const preflight = await checkWeatherApiAvailable();
+        test.skip(!preflight.ok, !preflight.ok ? preflight.reason : undefined);
+      }
       const demo = await gtcDemo({ name: "weather-mcp-demo" });
       const cases = pickDistinctRandomCities(2);
       const currentCase = cases[0]!;
