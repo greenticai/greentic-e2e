@@ -2,6 +2,7 @@ import { test, expect } from "./_fixtures/gtc-demo";
 import { WebChat } from "./_fixtures/webchat-page";
 import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join, dirname } from "node:path";
+import { checkDeepseekLlm } from "./_fixtures/llm-preflight";
 
 // The pet-daycare demo is the fast2flow showcase: it opts into
 // `greentic.cap.fast2flow.v1` and ships `assets/intent-index.json`, so a
@@ -14,7 +15,7 @@ const FAST2FLOW_ENV = { FAST2FLOW_MIN_CONFIDENCE: "0.05" };
 // ABSENCE proves a dispatch happened. The card text uses a curly apostrophe
 // (U+2019) — "I’m not sure…" — so match straight OR curly (or none).
 const NO_DISPATCH_FALLBACK = /I['’]?m not sure what you meant/i;
-const ERROR_MARKERS = /error|exception|panic|stack trace/i;
+const ERROR_MARKERS = /error|exception|panic|stack trace|something went wrong/i;
 
 const demoOpts = { name: "pet-daycare-demo", envOverrides: FAST2FLOW_ENV } as const;
 
@@ -31,7 +32,6 @@ const LLM_ONLY_UTTERANCE =
 const BOARDING_CARD = /Book Boarding|Boarding|Overnight/i;
 // LLM tier gated on a real backend (DeepSeek — a native greentic-llm provider,
 // ProviderKind::Deepseek). Mirrors deep-research-demo's env-gated pattern.
-const DEEPSEEK_KEY = process.env.DEEPSEEK_KEY?.trim();
 const llmDemoOpts = {
   name: "pet-daycare-demo",
   envOverrides: STRICT_FAST2FLOW_ENV,
@@ -156,13 +156,11 @@ test.describe("pet-daycare-demo (fast2flow routing + confidence)", () => {
     page,
     gtcDemo,
   }) => {
-    // The LLM fallback tier needs a real backend. Soft-skip when DEEPSEEK_KEY
-    // is absent (mirrors deep-research-demo) so the suite is green by default
-    // and exercises real routing wherever the key is set.
-    test.skip(
-      !DEEPSEEK_KEY,
-      "DEEPSEEK_KEY not set; fast2flow LLM routing tier not exercised",
-    );
+    // The LLM fallback tier needs a real backend. Validate DeepSeek actually
+    // answers (not just that the env var is set) so a dead/expired key skips
+    // here instead of failing after a full gtc setup + browser flow.
+    const preflight = await checkDeepseekLlm();
+    test.skip(!preflight.ok, !preflight.ok ? preflight.reason : undefined);
     const demo = await gtcDemo(llmDemoOpts);
     const chat = new WebChat(page, demo.demoUrl);
 

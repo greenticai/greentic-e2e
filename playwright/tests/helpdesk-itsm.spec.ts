@@ -1,7 +1,7 @@
 import { test, expect } from "./_fixtures/gtc-demo";
 import { WebChat } from "./_fixtures/webchat-page";
 
-const ERROR_MARKERS = /error|exception|panic|stack trace/i;
+const ERROR_MARKERS = /error|exception|panic|stack trace|something went wrong/i;
 
 test.describe("helpdesk-itsm demo (Phase 0 walking skeleton)", () => {
   // Framework smoke: verify the chat infra is up end-to-end (page loads,

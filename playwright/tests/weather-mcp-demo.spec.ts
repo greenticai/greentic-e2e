@@ -2,7 +2,7 @@ import type { Locator } from "@playwright/test";
 import { test, expect } from "./_fixtures/gtc-demo";
 import { WebChat } from "./_fixtures/webchat-page";
 
-const ERROR_MARKERS = /error|exception|panic|stack trace/i;
+const ERROR_MARKERS = /error|exception|panic|stack trace|something went wrong/i;
 const CAPITAL_CITIES: Array<{ city: string; country: string }> = [
   { city: "Nairobi", country: "Kenya" },
   { city: "Jakarta", country: "Indonesia" },

@@ -1,7 +1,7 @@
 import { test, expect } from "./_fixtures/gtc-demo";
 import { WebChat } from "./_fixtures/webchat-page";
 
-const ERROR_MARKERS = /error|exception|panic|stack trace/i;
+const ERROR_MARKERS = /error|exception|panic|stack trace|something went wrong/i;
 
 // The telco-x demo opens with a category menu (Traffic, Capacity, RCA,
 // Service Assurance, …). We don't pin to a specific label so the test
