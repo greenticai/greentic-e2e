@@ -37,7 +37,11 @@ jobs:
       - id: pick
         shell: bash
         env:
-          REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.gtc_channel || 'both' }}
+          # Scheduled runs are stable-only: the dev channel cannot install at
+          # all right now (see below), so running it nightly costs ~10 minutes
+          # of runner time to produce zero signal. `workflow_dispatch` can still
+          # ask for `dev` or `both` explicitly to check whether it has recovered.
+          REQUESTED: ${{ github.event_name == 'workflow_dispatch' && inputs.gtc_channel || 'stable' }}
         run: |
           set -euo pipefail
           stable='{"label":"stable-linux","runner":"ubuntu-24.04","channel":"stable"}'
@@ -54,13 +58,17 @@ jobs:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 60
-    # The dev lane is advisory while `gtc install --channel dev` is broken
-    # upstream: its cargo-source fallback runs `cargo install --bin
-    # greentic-dev-dev`, but the crate's only bin target is `greentic-dev`,
-    # so the install can never succeed (stuck on build 26763021498 since
-    # ~2026-06-26). Failures still show in the job log/annotations but no
-    # longer red the nightly while stable is green. Drop this once the dev
-    # manifest advances and installs cleanly.
+    # The dev lane is advisory, and off by default on the nightly (see `plan`).
+    # `gtc install --channel dev` cannot succeed: the toolchain manifest served
+    # from ghcr.io/greenticai/greentic-versions/gtc:dev pairs each LIBRARY crate
+    # with the BINARY ALIAS's bin name (crate `greentic-dev`, bins
+    # [`greentic-dev-dev`]) — but that bin lives in a separate crates.io crate
+    # (`greentic-dev-dev`). cargo binstall is handed the pair verbatim and dies
+    # on packages[0]; all 13 entries are broken the same way, and several of the
+    # pinned versions are now yanked besides. It is stale published DATA, not a
+    # code bug — the manifest generator was fixed 2026-06-30 but the dev manifest
+    # was never regenerated. Fix: regenerate + republish from greentic-dev
+    # (`release snapshot --channel dev`). Re-enable this lane once that lands.
     continue-on-error: ${{ matrix.channel == 'dev' }}
     strategy:
       fail-fast: false
