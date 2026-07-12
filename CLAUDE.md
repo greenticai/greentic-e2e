@@ -122,6 +122,19 @@ Provider tests accept 2xx-4xx HTTP responses as passing (provider processed the 
 
 The local test runner merges multiple fixture files via a Python script when testing multiple providers.
 
+**The top-level key must equal the pack's manifest `pack_id`, exactly.** `gtc setup` looks the
+pack up by exact string match on that key; a mismatch means it finds no pack and aborts with a
+B12a error whose text ("the pack ships no classifiable setup metadata") is misleading — the pack
+metadata is fine, the key just didn't match. The two families do not use the same convention:
+
+| Family | `pack_id` convention | Example |
+|--------|----------------------|---------|
+| Messaging | short name | `messaging-telegram` |
+| Events | dotted | `greentic.events.webhook`, `greentic.events.provider.dummy` |
+
+Confirm a pack's id before adding a fixture — `grep pack_id` in the provider repo's
+`packs/<name>/pack.yaml` (`greentic-messaging-providers` / `greentic-events-providers`).
+
 **Bundles** (`fixtures/bundles/`) - bundle YAML consumed by provider/passthrough tests.
 
 **Packs** (`fixtures/packs/`) - pre-built pack directories (`demo-app-pack`, `webchat-passthrough-probe`) used as test inputs.

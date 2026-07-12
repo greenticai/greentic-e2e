@@ -1,6 +1,5 @@
 {
   "_comment": "Combined setup answers for all providers. Replace ${VAR} with actual values.",
-
   "messaging-dummy": {
     "enabled": true,
     "channel_id": "e2e-test-channel"
@@ -57,12 +56,11 @@
     "mode": "directline",
     "jwt_signing_key": "${WEBCHAT_JWT_SIGNING_KEY}"
   },
-
-  "events-dummy": {
+  "greentic.events.provider.dummy": {
     "enabled": true,
     "event_type": "test-event"
   },
-  "events-webhook": {
+  "greentic.events.webhook": {
     "enabled": true,
     "public_base_url": "${PUBLIC_BASE_URL}",
     "webhook": {
@@ -70,7 +68,7 @@
       "topic_prefix": "webhook.e2e"
     }
   },
-  "events-timer": {
+  "greentic.events.timer": {
     "enabled": true,
     "schedules": [
       {
@@ -80,13 +78,13 @@
       }
     ]
   },
-  "events-email-sendgrid": {
+  "greentic.events.email.sendgrid": {
     "enabled": true,
     "public_base_url": "${PUBLIC_BASE_URL}",
     "sendgrid_api_key": "${SENDGRID_API_KEY}",
     "from_email": "${SENDGRID_FROM_EMAIL}"
   },
-  "events-sms-twilio": {
+  "greentic.events.sms.twilio": {
     "enabled": true,
     "public_base_url": "${PUBLIC_BASE_URL}",
     "twilio": {

@@ -38,7 +38,7 @@ GATEWAY_PORT="${GREENTIC_GATEWAY_PORT:-8080}"
 
 # Where to get the agentic bundle. A released .gtbundle URL from greentic-demo,
 # or a local directory passed via --bundle.
-AGENTIC_BUNDLE_SOURCE="${GREENTIC_AGENTIC_BUNDLE_SOURCE:-https://github.com/greenticai/greentic-demo/releases/latest/download/agentic-research-tavily-demo.gtbundle}"
+AGENTIC_BUNDLE_SOURCE="${GREENTIC_AGENTIC_BUNDLE_SOURCE:-https://github.com/greenticai/greentic-demo/releases/latest/download/agentic-research-tavily-demo-bundle.gtbundle}"
 E2E_BUNDLE_DIR="${E2E_BUNDLE_DIR:-}"
 
 # Webchat tenant + prompt. Override if your bundle uses a different tenant.
