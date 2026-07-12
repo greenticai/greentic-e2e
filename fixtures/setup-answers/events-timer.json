@@ -1,5 +1,5 @@
 {
-  "events-timer": {
+  "greentic.events.timer": {
     "enabled": true,
     "schedules": [
       {
