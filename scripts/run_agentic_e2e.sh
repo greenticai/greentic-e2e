@@ -41,12 +41,25 @@ GATEWAY_PORT="${GREENTIC_GATEWAY_PORT:-8080}"
 AGENTIC_BUNDLE_SOURCE="${GREENTIC_AGENTIC_BUNDLE_SOURCE:-https://github.com/greenticai/greentic-demo/releases/latest/download/agentic-research-tavily-demo-bundle.gtbundle}"
 E2E_BUNDLE_DIR="${E2E_BUNDLE_DIR:-}"
 
-# Webchat tenant + prompt. Override if your bundle uses a different tenant.
-AGENT_TENANT="${GREENTIC_AGENT_TENANT:-agentic-research-tavily-demo}"
+# Webchat tenant + prompt. The demo's published answers seal the webchat rail
+# under tenant `demo` (setup-answers.json: tenant=demo), so that is the tenant
+# the DirectLine endpoints live under — not the bundle/pack name.
+AGENT_TENANT="${GREENTIC_AGENT_TENANT:-demo}"
 AGENT_FLOW_ID="${GREENTIC_AGENT_FLOW_ID:-}"
 AGENT_PROMPT="${GREENTIC_AGENT_PROMPT:-In one short sentence, what is the capital of Japan?}"
+# A substring the reply must contain, so the assertion tests the ANSWER and not
+# merely that some bytes came back. Tied to AGENT_PROMPT — override both together.
+AGENT_EXPECT="${GREENTIC_AGENT_EXPECT:-Tokyo}"
 
-SETUP_ANSWERS="${SETUP_ANSWERS:-${REPO_ROOT}/fixtures/setup-answers/agentic-research-tavily.json}"
+# Setup answers. Default to the demo's OWN published answers rather than a
+# vendored copy: greentic-demo ships <demo>-setup-answers.json next to the
+# bundle, already parameterised with ${GREENTIC_LLM_API_KEY} / ${TAVILY_API_KEY}
+# placeholders for us to envsubst. A hand-maintained fixture drifts from the
+# bundle (it did: it was missing the messaging-webchat-gui answers entirely, so
+# `gtc setup --non-interactive` failed on a missing public_base_url). Override
+# with --answers <file> to pin a local copy.
+AGENTIC_SETUP_ANSWERS_SOURCE="${GREENTIC_AGENTIC_SETUP_ANSWERS_SOURCE:-https://github.com/greenticai/greentic-demo/releases/latest/download/agentic-research-tavily-demo-setup-answers.json}"
+SETUP_ANSWERS="${SETUP_ANSWERS:-}"
 
 START_PID=""
 TEMP_DIR=""
@@ -111,6 +124,14 @@ if [[ "$DRY_RUN" != "true" ]]; then
   command -v gtc >/dev/null 2>&1 || die "gtc not found on PATH (install a >=1.1.x toolchain that carries dw.agent)"
   command -v curl >/dev/null 2>&1 || die "curl is required"
   command -v perl >/dev/null 2>&1 || die "perl is required (timeout wrapper)"
+  if [[ -z "${E2E_BUNDLE_DIR}" ]]; then
+    command -v unsquashfs >/dev/null 2>&1 \
+      || die "unsquashfs is required to unpack a .gtbundle (apt: squashfs-tools, brew: squashfs)"
+  fi
+  if [[ -z "${SETUP_ANSWERS}" ]]; then
+    command -v envsubst >/dev/null 2>&1 \
+      || die "envsubst is required to fill the published setup answers (apt: gettext-base, brew: gettext)"
+  fi
   [[ -n "${GREENTIC_LLM_API_KEY:-}" ]] || die "GREENTIC_LLM_API_KEY is required (the worker needs an LLM key)"
 fi
 
@@ -125,10 +146,14 @@ if [[ -z "${E2E_BUNDLE_DIR}" ]]; then
   else
     curl -fSL "${AGENTIC_BUNDLE_SOURCE}" -o "${TEMP_DIR}/bundle.gtbundle" \
       || die "failed to download bundle from ${AGENTIC_BUNDLE_SOURCE}"
-    # .gtbundle is a tar/zip archive; try both.
-    tar -xzf "${TEMP_DIR}/bundle.gtbundle" -C "${E2E_BUNDLE_DIR}" 2>/dev/null \
+    # A .gtbundle is a squashfs image — greentic-bundle emits it with mksquashfs.
+    # (Older/hand-rolled bundles were tar/zip, so keep those as fallbacks.)
+    unsquashfs -q -f -d "${E2E_BUNDLE_DIR}" "${TEMP_DIR}/bundle.gtbundle" >/dev/null 2>&1 \
+      || tar -xzf "${TEMP_DIR}/bundle.gtbundle" -C "${E2E_BUNDLE_DIR}" 2>/dev/null \
       || unzip -q "${TEMP_DIR}/bundle.gtbundle" -d "${E2E_BUNDLE_DIR}" 2>/dev/null \
-      || die "could not unpack bundle (not tar.gz or zip)"
+      || die "could not unpack bundle (not squashfs, tar.gz, or zip)"
+    [[ -f "${E2E_BUNDLE_DIR}/bundle.yaml" ]] \
+      || die "unpacked bundle has no bundle.yaml at ${E2E_BUNDLE_DIR}"
   fi
 else
   log "Step 1: Using local bundle ${E2E_BUNDLE_DIR}"
@@ -138,10 +163,76 @@ fi
 # --- Step 2: Setup (seals LLM/tool secrets) --------------------------------
 log "Step 2: gtc setup"
 if [[ "$DRY_RUN" == "true" ]]; then
-  log "[DRY RUN] Would run: gtc setup --non-interactive --answers ${SETUP_ANSWERS} ${E2E_BUNDLE_DIR}"
+  log "[DRY RUN] Would fetch ${AGENTIC_SETUP_ANSWERS_SOURCE} and run: gtc setup --non-interactive --answers <answers> ${E2E_BUNDLE_DIR}"
 else
+  if [[ -z "${SETUP_ANSWERS}" ]]; then
+    # Pull the demo's own published answers, then fill the ${...} secret
+    # placeholders from the environment.
+    [[ -n "${TEMP_DIR}" ]] || TEMP_DIR="$(mktemp -d)"
+    raw="${TEMP_DIR}/setup-answers.raw.json"
+    SETUP_ANSWERS="${TEMP_DIR}/setup-answers.json"
+    log_verbose "fetching setup answers from ${AGENTIC_SETUP_ANSWERS_SOURCE}"
+    curl -fsSL "${AGENTIC_SETUP_ANSWERS_SOURCE}" -o "${raw}" \
+      || die "failed to download setup answers from ${AGENTIC_SETUP_ANSWERS_SOURCE}"
+    # TAVILY_API_KEY is optional; envsubst would otherwise leave it unset and
+    # emit a literal empty string, which is what we want.
+    GREENTIC_LLM_API_KEY="${GREENTIC_LLM_API_KEY:-}" \
+    TAVILY_API_KEY="${TAVILY_API_KEY:-}" \
+      envsubst < "${raw}" > "${SETUP_ANSWERS}" \
+      || die "envsubst failed on ${raw}"
+
+    # Drop answer sections gtc cannot accept, or setup fails closed on B12a:
+    #
+    #   * packs the bundle does not ship at all (currently
+    #     `agentic-research-tavily-agent` — the published answers name it but no
+    #     such .gtpack is in the bundle), and
+    #   * packs that ship no setup metadata (currently
+    #     `agentic-research-tavily-demo` — no assets/setup.yaml, no
+    #     secret-requirements). gtc refuses to classify answers as secret-or-not
+    #     for such a pack and aborts rather than risk writing plaintext.
+    #
+    # In both cases the B12a error blames the pack's contents, which sends you
+    # looking in the wrong place. The agent still gets its credentials: dw.agent
+    # reads GREENTIC_LLM_API_KEY / TAVILY_API_KEY from the environment, which we
+    # export into `gtc start` below.
+    python3 - "${SETUP_ANSWERS}" "${E2E_BUNDLE_DIR}" <<'PY'
+import json, pathlib, sys, zipfile
+
+answers_path, bundle_dir = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+doc = json.loads(answers_path.read_text())
+answers = doc.get("setup_answers")
+
+def accepts_answers(pack: pathlib.Path) -> bool:
+    """True if the pack ships metadata letting gtc classify answers as secrets."""
+    try:
+        with zipfile.ZipFile(pack) as z:
+            names = z.namelist()
+    except Exception:
+        return False
+    return any(
+        n.endswith("setup.yaml")
+        or "secret-requirements" in n
+        or "secret_requirements" in n
+        or (n.startswith("qa/") and n.endswith(".json"))
+        for n in names
+    )
+
+if isinstance(answers, dict):
+    packs = {p.stem: p for p in bundle_dir.rglob("*.gtpack")}
+    missing = [k for k in answers if k not in packs]
+    no_meta = [k for k in answers if k in packs and not accepts_answers(packs[k])]
+    for k in missing + no_meta:
+        del answers[k]
+    if missing:
+        print(f"[agentic-e2e] dropped answers for packs not in the bundle: {', '.join(sorted(missing))}")
+    if no_meta:
+        print(f"[agentic-e2e] dropped answers for packs shipping no setup metadata: {', '.join(sorted(no_meta))}")
+    if not answers:
+        sys.exit("[agentic-e2e][ERROR] no usable setup answers left — the bundle changed shape")
+    answers_path.write_text(json.dumps(doc, indent=2) + "\n")
+PY
+  fi
   [[ -f "${SETUP_ANSWERS}" ]] || die "setup answers not found: ${SETUP_ANSWERS}"
-  # Env vars (GREENTIC_LLM_API_KEY, TAVILY_API_KEY) are substituted by gtc setup.
   run_with_timeout "$GTC_CMD_TIMEOUT" \
     gtc setup --non-interactive --answers "${SETUP_ANSWERS}" "${E2E_BUNDLE_DIR}" \
     || die "gtc setup failed"
@@ -182,7 +273,8 @@ log "Gateway ready"
 # (the demo's render_answer node), so we accept either.
 log "Step 5: driving one dw.agent turn over webchat — prompt: \"${AGENT_PROMPT}\""
 REPLY="$(GATEWAY_PORT="${GATEWAY_PORT}" AGENT_TENANT="${AGENT_TENANT}" \
-  AGENT_PROMPT="${AGENT_PROMPT}" AGENT_TURN_TIMEOUT="${AGENT_TURN_TIMEOUT}" python3 - <<'PY'
+  AGENT_PROMPT="${AGENT_PROMPT}" AGENT_TURN_TIMEOUT="${AGENT_TURN_TIMEOUT}" \
+  AGENT_EXPECT="${AGENT_EXPECT}" python3 - <<'PY'
 import json, os, sys, time, urllib.request, urllib.error
 
 base = f"http://127.0.0.1:{os.environ['GATEWAY_PORT']}/v1/messaging/webchat/{os.environ['AGENT_TENANT']}"
@@ -199,6 +291,16 @@ def call(method, path, body=None, token=None):
             return resp.status, resp.read().decode()
     except urllib.error.HTTPError as exc:
         return exc.code, exc.read().decode()
+
+# A reply that is merely non-empty proves nothing: the runtime's generic failure
+# card and a stray reply from another pack both satisfy it. Require a real answer.
+ERROR_MARKERS = (
+    "something went wrong",
+    "please try again",
+    "i'm not sure what you meant",
+    "service is unavailable",
+)
+EXPECT = os.environ.get("AGENT_EXPECT", "").strip()
 
 def reply_text(activity):
     text = (activity.get("text") or "").strip()
@@ -239,9 +341,26 @@ for _ in range(max(1, deadline // 3)):
         if activity.get("from", {}).get("id") == "e2e-user":
             continue
         text = reply_text(activity)
-        if text:
-            print(text)
-            sys.exit(0)
+        if not text:
+            continue
+
+        # A reply is not enough — the worker must actually ANSWER. Without this,
+        # the runtime's generic failure card ("Something went wrong with this
+        # service…") counts as a pass, and so does a reply from some other pack
+        # entirely if state leaks between runs. Both happen.
+        low = text.lower()
+        for marker in ERROR_MARKERS:
+            if marker in low:
+                sys.stderr.write(f"dw.agent returned an error reply: {text}\n")
+                sys.exit(5)
+        if EXPECT and EXPECT.lower() not in low:
+            sys.stderr.write(
+                f"dw.agent replied but the answer looks wrong — expected to see "
+                f"{EXPECT!r} in: {text}\n"
+            )
+            sys.exit(6)
+        print(text)
+        sys.exit(0)
 
 sys.stderr.write("timed out waiting for a dw.agent reply\n")
 sys.exit(4)

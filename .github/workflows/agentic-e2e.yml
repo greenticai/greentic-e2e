@@ -44,10 +44,23 @@ jobs:
             exit 1
           fi
 
-      - name: Install gtc
+      - name: Install system dependencies
         run: |
-          cargo install cargo-binstall --locked || true
-          cargo binstall -y gtc --version "${GTC_VERSION}" || cargo binstall -y gtc
+          # A .gtbundle is a squashfs image, so unpacking it needs unsquashfs.
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq squashfs-tools
+
+      # Use the shared bootstrap, not a bare `cargo binstall gtc`. `gtc` alone is
+      # just the router — it shells out to companion binaries, and without
+      # `gtc install` there is no greentic-setup/greentic-start on PATH, so the
+      # run died with "greentic-setup not found in PATH". This action pins the
+      # toolchain release and installs the companions, exactly as the other
+      # workflows do.
+      - name: Set up Greentic toolchain
+        uses: ./.github/actions/setup-greentic
+        with:
+          gtc-version: ${{ env.GTC_VERSION }}
 
       - name: Run agentic worker e2e
         env:
