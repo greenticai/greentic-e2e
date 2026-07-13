@@ -373,7 +373,12 @@ jobs:
           # surface minutes later as a misleading APP_PACK_NOT_FOUND at start.
           if ! gtc setup --non-interactive --answers "${ROOT}/setup-answers.json" "${BUNDLE_DIR}" \
             < /dev/null; then
-            echo "FAIL: gtc setup failed for ${PROVIDER} — see output above (usually a missing/renamed answer key in fixtures/setup-answers/${PROVIDER}.json)"
+            echo "FAIL: gtc setup failed for ${PROVIDER} — see the error above."
+            echo "  If it is B12a ('pack ships no classifiable setup metadata'), the message is"
+            echo "  misleading: it really means gtc could not find the pack at all. The top-level"
+            echo "  key in fixtures/setup-answers/${PROVIDER}.json must equal the pack's manifest"
+            echo "  pack_id exactly. Events packs use dotted ids (greentic.events.webhook);"
+            echo "  messaging packs use short ids (messaging-telegram)."
             exit 1
           fi
 
@@ -588,7 +593,12 @@ jobs:
           # surface minutes later as a misleading APP_PACK_NOT_FOUND at start.
           if ! gtc setup --non-interactive --answers "${ROOT}/setup-answers.json" "${BUNDLE_DIR}" \
             < /dev/null; then
-            echo "FAIL: gtc setup failed for ${PROVIDER} — see output above (usually a missing/renamed answer key in fixtures/setup-answers/${PROVIDER}.json)"
+            echo "FAIL: gtc setup failed for ${PROVIDER} — see the error above."
+            echo "  If it is B12a ('pack ships no classifiable setup metadata'), the message is"
+            echo "  misleading: it really means gtc could not find the pack at all. The top-level"
+            echo "  key in fixtures/setup-answers/${PROVIDER}.json must equal the pack's manifest"
+            echo "  pack_id exactly. Events packs use dotted ids (greentic.events.webhook);"
+            echo "  messaging packs use short ids (messaging-telegram)."
             exit 1
           fi
 

@@ -1,5 +1,5 @@
 {
-  "events-dummy": {
+  "greentic.events.provider.dummy": {
     "enabled": true,
     "event_type": "test-event",
     "poll_interval_ms": 1000

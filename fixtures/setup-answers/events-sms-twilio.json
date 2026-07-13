@@ -1,5 +1,5 @@
 {
-  "events-sms-twilio": {
+  "greentic.events.sms.twilio": {
     "enabled": true,
     "public_base_url": "${PUBLIC_BASE_URL}",
     "twilio": {

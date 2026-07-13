@@ -1,5 +1,5 @@
 {
-  "events-webhook": {
+  "greentic.events.webhook": {
     "enabled": true,
     "public_base_url": "${PUBLIC_BASE_URL}",
     "webhook": {
