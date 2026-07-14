@@ -273,15 +273,25 @@ async function gtcSetup(
 }
 
 /**
- * gtc setup writes config but does NOT populate the dev-store secrets backend
- * the runner reads from at startup. The runner reports
- * `using_env_fallback=false` so env vars are not consulted either. Mirror the
- * pattern in scripts/run_webchat_passthrough_e2e.sh: seed messaging-webchat-gui
- * secrets via `greentic-secrets admin set` before starting the runner. Without
- * this, the WebChat UI gets HTTP 500 on the DirectLine token request.
+ * Seed the dev-store secrets backend the runner reads at startup, mirroring
+ * scripts/run_webchat_passthrough_e2e.sh. Without it the WebChat UI gets HTTP
+ * 500 on the DirectLine token request. Values come from the patched
+ * setup-answers JSON, so overrides via DemoOptions.setupAnswers or a demo's
+ * patch file are honoured.
  *
- * Reads the values from the patched setup-answers JSON, so any value override
- * via DemoOptions.setupAnswers or the demo's patch file is honored.
+ * SCOPE MATTERS, and getting it wrong fails silently. The runner resolves a
+ * component secret from `secrets://local/<team>/_/<pack>/<name>`, so we must
+ * seed with `--env local --tenant <team>`. This seeded `--env dev` for months,
+ * which writes somewhere nothing reads — the secret simply is not found, the
+ * component proceeds without it, and the only trace is one WARN in the runner
+ * log while the failure surfaces much later as a rejected upstream API call.
+ * That is exactly how weather-mcp broke: WeatherAPI was called with no key.
+ *
+ * Note `gtc setup` DOES persist these secrets as well (an earlier version of
+ * this comment claimed it does not — it does), but it seals them under the
+ * tenant from the answers file (`demo`), while the runner looks them up under
+ * the team (`default`). Until those agree upstream, this seeding is what makes
+ * the secret resolvable.
  */
 async function seedSetupAnswerSecrets(
   bundleDir: string,
@@ -304,8 +314,15 @@ async function seedSetupAnswerSecrets(
         [
           "admin",
           "set",
+          // env MUST be `local`, not `dev`. The runtime resolves component
+          // secrets from `secrets://local/<team>/_/<pack>/<name>` — seeding
+          // under `dev` writes them where nothing ever reads, which is why the
+          // weather component called WeatherAPI with no key and every request
+          // came back rejected:
+          //   secret lookup failed secret=auth.param.get_weather.key
+          //   error=not found: secrets://local/default/_/weatherapi-pack/auth_param_get_weather_key
           "--env",
-          "dev",
+          "local",
           "--tenant",
           team,
           "--store-path",
