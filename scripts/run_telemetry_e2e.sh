@@ -69,16 +69,11 @@ die() { echo "ERROR: $*" >&2; exit 1; }
 
 cleanup() {
   log "Cleaning up..."
-  if [[ -n "${START_PID}" ]] && kill -0 "${START_PID}" 2>/dev/null; then
-    log "Stopping gtc start (PID: ${START_PID})"
-    kill -TERM "${START_PID}" 2>/dev/null || true
-    sleep 2
-    kill -9 "${START_PID}" 2>/dev/null || true
+  if [[ -n "${RUNTIME_HOME:-}" ]]; then
+    HOME="$RUNTIME_HOME" gtc stop 2>/dev/null || log "WARN: gtc stop failed ($?)"
   fi
-  # Kill this run's greentic-start (a child of the gtc launcher) — scope to our
-  # temp dir so we never touch an unrelated demo server.
-  if [[ -n "${TEMP_DIR:-}" ]]; then
-    pkill -f "greentic-start.*${TEMP_DIR}" 2>/dev/null || true
+  if [[ -n "${START_PID:-}" ]]; then
+    kill "$START_PID" 2>/dev/null || true
   fi
   pkill -f "greentic-runner" 2>/dev/null || true
   pkill -f "nats-server" 2>/dev/null || true
@@ -176,6 +171,8 @@ log "Setup exited ${SETUP_EXIT}"
 ###############################################################################
 log ""
 log "Step 3: Starting gtc with OTLP export -> 127.0.0.1:${HOST_OTLP_PORT}..."
+RUNTIME_HOME="$(mktemp -d "${TEMP_DIR}/runtime-home.XXXXXX")"
+HOME="$RUNTIME_HOME" \
 TELEMETRY_EXPORT="${TELEMETRY_EXPORT_MODE}" \
 OTLP_ENDPOINT="http://127.0.0.1:${HOST_OTLP_PORT}" \
 OTEL_EXPORTER_OTLP_ENDPOINT="http://127.0.0.1:${HOST_OTLP_PORT}" \
@@ -184,24 +181,24 @@ OTEL_METRIC_EXPORT_INTERVAL="${OTEL_METRIC_EXPORT_INTERVAL:-3000}" \
 GREENTIC_GATEWAY_LISTEN_ADDR="127.0.0.1" \
 GREENTIC_GATEWAY_PORT="${HTTP_PORT}" \
 RUST_LOG="${RUST_LOG:-info}" \
-  gtc start "${E2E_BUNDLE_DIR}" --cloudflared off --ngrok off > "${E2E_LOG}" 2>&1 &
+  gtc start "${E2E_BUNDLE_DIR}" --cloudflared off > "${E2E_LOG}" 2>&1 &
 START_PID=$!
 log "Started gtc (PID: ${START_PID})"
 
-# Cold start (component cache build, etc.) can take ~60s. Treat either a live
-# /readyz or the "Ready. Press Ctrl+C" log marker as ready.
 READY_TIMEOUT="${READY_TIMEOUT:-120}"
 HTTP_READY=false
 for i in $(seq 1 "${READY_TIMEOUT}"); do
-  if curl -sf -o /dev/null "http://127.0.0.1:${HTTP_PORT}/readyz" 2>/dev/null \
-     || curl -s -o /dev/null -w "%{http_code}" "http://127.0.0.1:${HTTP_PORT}/" 2>/dev/null | grep -qE "^[2-4]" \
-     || grep -qF "Ready. Press Ctrl" "${E2E_LOG}" 2>/dev/null; then
+  if curl -sf -o /dev/null "http://127.0.0.1:${HTTP_PORT}/readyz" 2>/dev/null; then
     HTTP_READY=true; log "PASS: gtc ready after ${i}s"; break
   fi
   kill -0 "${START_PID}" 2>/dev/null || { log "FAIL: gtc exited early"; tail -30 "${E2E_LOG}"; exit 1; }
   sleep 1
 done
-[[ "$HTTP_READY" == "true" ]] || { log "WARN: gtc not ready after ${READY_TIMEOUT}s"; tail -20 "${E2E_LOG}"; }
+if [[ "$HTTP_READY" != "true" ]]; then
+  log "FAIL: gtc not ready after ${READY_TIMEOUT}s"
+  tail -20 "${E2E_LOG}"
+  exit 1
+fi
 sleep 2
 
 ###############################################################################
@@ -265,7 +262,7 @@ if [[ "$KEEP_RUNNING" == "true" ]]; then
   log "Keeping services running (--keep-running)"
   log "  Bundle:    ${E2E_BUNDLE_DIR}"
   log "  gtc log:   ${E2E_LOG}"
-  log "  gtc PID:   ${START_PID}"
+  log "  Stop with: HOME=$RUNTIME_HOME gtc stop"
   log "  Dump file: ${DUMP_FILE}"
   log "  Collector: ${COLLECTOR_NAME}"
   trap - EXIT

@@ -21,7 +21,7 @@ inputs:
     description: >-
       Pinned Greentic toolchain release passed to `gtc install --release`.
       Bump here to roll every workflow forward at once.
-    default: '1.1.2'
+    default: '1.1.7'
   install-gtc:
     description: Install the gtc CLI via cargo-binstall
     default: 'true'

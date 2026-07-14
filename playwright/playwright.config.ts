@@ -28,9 +28,9 @@ export default defineConfig({
     "pet-daycare-demo.spec.ts",
     "llm-credentials.spec.ts",
   ],
-  // Serialize tests: greentic-start does not expose --port and binds the runner
-  // to default 8080, so two concurrent demos would collide. Tests are short
-  // (~30s each) so serialization is acceptable for now.
+  // Single worker: per-test HOME isolation ensures clean start-stop cycles.
+  // Concurrent workers require proven concurrent-stop reliability, which is
+  // unverified (see port-concurrency probes July 2026).
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,

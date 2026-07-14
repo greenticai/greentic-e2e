@@ -1,7 +1,13 @@
 import { test as base, expect, type TestInfo } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir, writeFile, readFile, chmod } from "node:fs/promises";
-import { createWriteStream, existsSync, readFileSync } from "node:fs";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
+import {
+  createWriteStream,
+  existsSync,
+  readFileSync,
+  mkdtempSync,
+  rmSync,
+} from "node:fs";
 import { createServer } from "node:net";
 import { join, dirname } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
@@ -49,6 +55,7 @@ export interface DemoOptions {
 
 interface RunningDemo extends GtcDemo {
   proc: ChildProcess;
+  testHome: string;
 }
 
 const GTC_BIN = process.env.GTC_BIN ?? "gtc";
@@ -364,10 +371,7 @@ async function applyAnswersPatch(
   // OpenAI-compatible endpoint). When the key is missing, drop the override
   // entirely so the upstream local-LLM (Ollama) defaults survive for the
   // LOCAL_LLM=1 path.
-  if (
-    demoName === "deep-research-demo" &&
-    !process.env.DEEPSEEK_KEY?.trim()
-  ) {
+  if (demoName === "deep-research-demo" && !process.env.DEEPSEEK_KEY?.trim()) {
     const patchSetupAnswers = (
       patch as { setup_answers?: Record<string, unknown> }
     ).setup_answers;
@@ -409,8 +413,7 @@ async function applyAnswersPatch(
       merged as { setup_answers?: Record<string, unknown> }
     ).setup_answers ??= {});
     const weather = ((setupAnswers["weatherapi-pack"] as
-      | Record<string, unknown>
-      | undefined) ??= {});
+      Record<string, unknown> | undefined) ??= {});
     if (weatherApiKey) {
       weather["auth_param_get_weather_key"] = weatherApiKey;
       weather["auth_param_get_forecast_weather_key"] = weatherApiKey;
@@ -421,8 +424,7 @@ async function applyAnswersPatch(
       merged as { setup_answers?: Record<string, unknown> }
     ).setup_answers ??= {});
     const deepResearch = ((setupAnswers["deep-research-demo"] as
-      | Record<string, unknown>
-      | undefined) ??= {});
+      Record<string, unknown> | undefined) ??= {});
     const provider = deepResearch["provider"];
     const model = deepResearch["model"];
     const url = deepResearch["url"];
@@ -489,10 +491,13 @@ async function applyBundleLlm(
   if (llm) {
     const block = [`llm:`, `  provider: ${llm.provider}`];
     if (llm.model) block.push(`  model: ${llm.model}`);
-    if (llm.api_key_secret) block.push(`  api_key_secret: ${llm.api_key_secret}`);
+    if (llm.api_key_secret)
+      block.push(`  api_key_secret: ${llm.api_key_secret}`);
     if (llm.base_url) block.push(`  base_url: ${llm.base_url}`);
     if (llm.fast2flow_llm_min_confidence != null)
-      block.push(`  fast2flow_llm_min_confidence: ${llm.fast2flow_llm_min_confidence}`);
+      block.push(
+        `  fast2flow_llm_min_confidence: ${llm.fast2flow_llm_min_confidence}`,
+      );
     next = `${stripped.replace(/\n*$/, "")}\n${block.join("\n")}\n`;
   }
   if (next !== original) await writeFile(bundleYaml, next);
@@ -558,27 +563,6 @@ function deepMerge<T>(base: T, overlay: Partial<T>): T {
   return out as T;
 }
 
-/**
- * greentic-start unconditionally invokes the `open` crate's
- * `open::that(url)` after `/readyz` to spawn the demo URL in the
- * developer's default browser. Recent gtc/greentic-start exposes
- * `--no-browser` to suppress this. For older toolchains we fall back
- * to a PATH shim that no-ops `open`/`xdg-open`.
- */
-async function ensureNoOpenShim(): Promise<string> {
-  const shimDir = join(REPO_TMP_BASE, "no-open-shim");
-  const shimContent = "#!/bin/sh\nexit 0\n";
-  for (const name of ["open", "xdg-open"]) {
-    const path = join(shimDir, name);
-    if (!existsSync(path)) {
-      await mkdir(shimDir, { recursive: true });
-      await writeFile(path, shimContent);
-      await chmod(path, 0o755);
-    }
-  }
-  return shimDir;
-}
-
 function tailLog(logFile: string, lines = 100): void {
   try {
     const content = readFileSync(logFile, "utf8");
@@ -595,45 +579,29 @@ async function gtcStart(
   bundleDir: string,
   logFile: string,
   port: number,
+  testHome: string,
   envOverrides?: Record<string, string>,
 ): Promise<ChildProcess> {
-  // greentic-runner --bindings expects extracted .gtbind files which only
-  // exist after greentic-start mounts the bundle's squashfs. Use
-  // greentic-start directly (gtc start --no-browser passes through to it on
-  // gtc >= 1.0.18, but the --no-browser flag itself lives on greentic-start).
-  // Trade-off: greentic-start does not expose a --port flag (only
-  // --admin-port), so the runner binds to its default 8080. Tests run with
-  // workers: 1 (serialized) to avoid port collision.
   await mkdir(join(bundleDir, "..", "logs"), { recursive: true }).catch(
     () => {},
   );
   const logStream = createWriteStream(logFile, { flags: "w" });
-  const noOpenShimDir = await ensureNoOpenShim();
   const startEnv: Record<string, string> = {
     RUST_LOG: "info",
     ...(process.env as Record<string, string>),
     ...envOverrides,
+    HOME: testHome,
     GREENTIC_GATEWAY_LISTEN_ADDR: "127.0.0.1",
     GREENTIC_GATEWAY_PORT: String(port),
-    PATH: `${noOpenShimDir}:${process.env.PATH ?? ""}`,
   };
   const proc = spawn(
-    "greentic-start",
-    [
-      "start",
-      "--config",
-      join(bundleDir, "bundle.yaml"),
-      "--cloudflared",
-      "off",
-      "--ngrok",
-      "off",
-      "--no-browser",
-      "--quiet",
-    ],
+    GTC_BIN,
+    ["start", bundleDir, "--cloudflared", "off", "--quiet"],
     {
       cwd: bundleDir,
       env: startEnv,
       stdio: ["ignore", "pipe", "pipe"],
+      detached: true,
     },
   );
   proc.stdout?.pipe(logStream);
@@ -654,7 +622,7 @@ async function waitForReady(
   while (Date.now() < deadline) {
     if (proc.exitCode !== null) {
       throw new Error(
-        `greentic-runner exited ${proc.exitCode} before /readyz; check attached log`,
+        `gtc exited ${proc.exitCode} before /readyz; check attached log`,
       );
     }
     try {
@@ -671,15 +639,29 @@ async function waitForReady(
   );
 }
 
-async function stopGtc(proc: ChildProcess): Promise<void> {
+async function stopGtc(handle: RunningDemo): Promise<void> {
+  const { proc, testHome } = handle;
   if (proc.exitCode !== null) return;
-  proc.kill("SIGTERM");
-  const killed = await Promise.race([
+
+  // Ask the env-path runtime to shut down via `gtc stop` under the
+  // test's isolated HOME — this reaps greentic-start cleanly.
+  const stop = spawn(GTC_BIN, ["stop"], {
+    env: { ...process.env, HOME: testHome },
+    stdio: "ignore",
+  });
+  await new Promise<void>((res) => stop.once("exit", () => res()));
+
+  // Wait up to 5 s for the parent `gtc start` process to exit.
+  const exited = await Promise.race([
     new Promise<boolean>((res) => proc.once("exit", () => res(true))),
     sleep(5_000).then(() => false),
   ]);
-  if (!killed && proc.exitCode === null) {
-    proc.kill("SIGKILL");
+
+  if (!exited && proc.exitCode === null) {
+    // Process-group kill: catches gtc AND any surviving greentic-start.
+    try {
+      process.kill(-proc.pid!, "SIGKILL");
+    } catch {}
     await new Promise<void>((res) => proc.once("exit", () => res()));
   }
 }
@@ -711,7 +693,6 @@ export const test = base.extend<{
         }
       }
 
-      // greentic-start does not expose --port; runner uses default 8080.
       const port = await findFreePort();
       const releaseTag = opts.releaseTag ?? "latest";
 
@@ -742,7 +723,14 @@ export const test = base.extend<{
         );
       }
 
-      await gtcSetup(bundleDir, setupAnswersPath, opts.envOverrides);
+      // Per-test HOME isolation: each test gets its own HOME so `gtc stop`
+      // only affects this test's runtime. Avoids the "polluted HOME" failure
+      // mode where gtc stop fails after multiple boot cycles under the same
+      // HOME (see port-concurrency probes July 2026).
+      const testHome = mkdtempSync(join(REPO_TMP_BASE, "home-"));
+      const envWithHome = { ...opts.envOverrides, HOME: testHome };
+
+      await gtcSetup(bundleDir, setupAnswersPath, envWithHome);
 
       const team = opts.team ?? "default";
       const tenant = opts.tenant ?? "demo";
@@ -761,12 +749,29 @@ export const test = base.extend<{
         `gtc-${opts.name}-w${testInfo.workerIndex}.log`,
       );
       console.log(`[gtc-demo] log → ${logFile}`);
-      const proc = await gtcStart(bundleDir, logFile, port, opts.envOverrides);
+      const proc = await gtcStart(
+        bundleDir,
+        logFile,
+        port,
+        testHome,
+        opts.envOverrides,
+      );
 
       try {
         await waitForReady(port, proc);
       } catch (e) {
-        await stopGtc(proc);
+        const earlyHandle: RunningDemo = {
+          name: opts.name,
+          team,
+          tenant,
+          port,
+          demoUrl: "",
+          bundleDir,
+          logFile,
+          proc,
+          testHome,
+        };
+        await stopGtc(earlyHandle);
         tailLog(logFile);
         await testInfo.attach(`gtc-log-${opts.name}-startup-fail`, {
           path: logFile,
@@ -784,6 +789,7 @@ export const test = base.extend<{
         bundleDir,
         logFile,
         proc,
+        testHome,
       };
       created.push(handle);
       return handle;
@@ -792,7 +798,7 @@ export const test = base.extend<{
     await use(factory);
 
     for (const h of created) {
-      await stopGtc(h.proc);
+      await stopGtc(h);
       if (testInfo.status === "failed" || testInfo.status === "timedOut") {
         tailLog(h.logFile);
         await testInfo.attach(`gtc-log-${h.name}`, {
@@ -800,6 +806,7 @@ export const test = base.extend<{
           contentType: "text/plain",
         });
       }
+      rmSync(h.testHome, { recursive: true, force: true });
     }
   },
 });

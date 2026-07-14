@@ -2,7 +2,7 @@ name: WebChat Passthrough E2E
 
 # Regression guard for the WebChat DirectLine envelope passthrough
 # contract (attachments / channelData / entities). Runs the full stack
-# (greentic-start + runner + messaging-webchat-gui) against a minimal
+# (gtc start + env-path runtime + messaging-webchat-gui) against a minimal
 # probe pack and asserts the bot activity carries exactly 1 attachment
 # with channelData and entities intact — catches the "stripped" regression
 # (historically TASK-082 Bug 3) and the "duplicated" regression
@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           export PATH="$HOME/.cargo/bin:$PATH"
-          cargo binstall -y cargo-component greentic-start greentic-secrets greentic-pack
+          cargo binstall -y cargo-component greentic-secrets greentic-pack
 
       - name: Run WebChat passthrough e2e
         shell: bash

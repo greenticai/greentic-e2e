@@ -9,10 +9,10 @@
 #
 # The probe flow emits exactly 1 Adaptive Card attachment + channelData +
 # entities from `fixtures/packs/webchat-passthrough-probe`. After round-tripping
-# through greentic-start → runner → messaging-webchat-gui provider → DirectLine
-# state store → GET /activities, the test asserts the activity carries exactly
-# one attachment with the original SHA-256 and the channelData / entities
-# fields intact.
+# through gtc start → env-path runtime → messaging-webchat-gui provider →
+# DirectLine state store → GET /activities, the test asserts the activity
+# carries exactly one attachment with the original SHA-256 and the channelData /
+# entities fields intact.
 #
 # Why this exists separately from `run_provider_e2e.sh`: the provider e2e
 # script tests ingress and lifecycle but not the attachments passthrough
@@ -22,7 +22,7 @@
 #   ./scripts/run_webchat_passthrough_e2e.sh
 #
 # Options (env):
-#   PORT            HTTP port for greentic-start (default 8091)
+#   PORT            HTTP port for gtc start (default 8080)
 #   KEEP_BUNDLE     if set, don't wipe the generated bundle on exit
 #   SKIP_BUILD      if set, skip the probe WASM + pack rebuild (requires existing dist/)
 
@@ -32,9 +32,6 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FIXTURES_DIR="${ROOT_DIR}/fixtures"
 PROBE_PACK_SRC="${FIXTURES_DIR}/packs/webchat-passthrough-probe"
 ANSWERS_TEMPLATE="${FIXTURES_DIR}/wizard-answers/webchat-passthrough-bundle.json"
-# greentic-start 0.5.x binds HTTP to a bundle-derived port (default 8080) and
-# does not expose a --port flag; override via env var isn't supported either.
-# Hard-code here; the preflight check guards against a conflict.
 PORT="${PORT:-8080}"
 
 WORK_DIR="$(mktemp -d -t greentic-webchat-attach-XXXXXX)"
@@ -44,11 +41,8 @@ RUNTIME_LOG="${WORK_DIR}/runtime.log"
 RESPONSE_FILE="${WORK_DIR}/activities.json"
 
 cleanup() {
-  # Stop runtime first so it flushes the state store cleanly
-  if [ -n "${RUNTIME_PID:-}" ]; then
-    kill "${RUNTIME_PID}" 2>/dev/null || true
-  fi
-  pkill -f "greentic-start.*start.*--bundle" 2>/dev/null || true
+  HOME="${RUNTIME_HOME:-}" gtc stop 2>/dev/null || echo "WARN: gtc stop failed ($?)" >&2
+  kill "${RUNTIME_PID:-}" 2>/dev/null || true
   sleep 1
   if [ -z "${KEEP_BUNDLE:-}" ]; then
     rm -rf "${WORK_DIR}"
@@ -61,7 +55,6 @@ trap cleanup EXIT
 # --- preflight --------------------------------------------------------------
 need() { command -v "$1" >/dev/null 2>&1 || { echo "FAIL: $1 not found on PATH" >&2; exit 1; }; }
 need gtc
-need greentic-start
 need greentic-secrets
 need greentic-pack
 need cargo-component
@@ -115,28 +108,31 @@ do
   name="${pair%%=*}"
   value="${pair#*=}"
   greentic-secrets admin set \
-    --env dev --tenant default --store-path "${STORE}" --visibility team \
+    --env local --tenant default --store-path "${STORE}" --visibility team \
     --category messaging-webchat-gui --name "${name}" --value "${value}" >/dev/null
 done
 
 # --- start runtime -----------------------------------------------------------
 echo "[runtime] starting on :${PORT}"
-(cd "${BUNDLE_DIR}" && greentic-start --locale en start --bundle . \
-    --nats off --cloudflared off --ngrok off \
-    > "${RUNTIME_LOG}" 2>&1) &
+RUNTIME_HOME="$(mktemp -d "${WORK_DIR}/runtime-home.XXXXXX")"
+GREENTIC_GATEWAY_PORT="${PORT}" \
+GREENTIC_GATEWAY_LISTEN_ADDR="127.0.0.1" \
+HOME="${RUNTIME_HOME}" \
+  gtc start "${BUNDLE_DIR}" --cloudflared off \
+  > "${RUNTIME_LOG}" 2>&1 &
 RUNTIME_PID=$!
 
 for _ in $(seq 1 90); do
-  if grep -q '^Ready\.' "${RUNTIME_LOG}" 2>/dev/null; then break; fi
+  if curl -sf "http://127.0.0.1:${PORT}/readyz" >/dev/null 2>&1; then break; fi
   if ! kill -0 "${RUNTIME_PID}" 2>/dev/null; then
-    echo "FAIL: runtime exited during startup" >&2
+    echo "FAIL: gtc exited during startup" >&2
     tail -40 "${RUNTIME_LOG}" >&2
     exit 1
   fi
   sleep 1
 done
-if ! grep -q '^Ready\.' "${RUNTIME_LOG}"; then
-  echo "FAIL: runtime did not become Ready within 90s" >&2
+if ! curl -sf "http://127.0.0.1:${PORT}/readyz" >/dev/null 2>&1; then
+  echo "FAIL: runtime did not pass /readyz within 90s" >&2
   tail -40 "${RUNTIME_LOG}" >&2
   exit 1
 fi
