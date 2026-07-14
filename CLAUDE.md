@@ -139,7 +139,7 @@ Confirm a pack's id before adding a fixture — `grep pack_id` in the provider r
 
 **Packs** (`fixtures/packs/`) - pre-built pack directories (`demo-app-pack`, `webchat-passthrough-probe`) used as test inputs.
 
-**Wizard answers** (`fixtures/wizard-answers/`) - pre-baked JSON answer files for non-interactive replay (distinct from the `wizard/` templates above).
+**Wizard answers** (`fixtures/wizard-answers/`) - pre-baked JSON answer files for non-interactive replay (distinct from the `wizard/` templates below).
 
 **Store dual-publish** (`fixtures/store-dual-publish/`) - vendored `manifest.cbor` + README for the store lifecycle test.
 
