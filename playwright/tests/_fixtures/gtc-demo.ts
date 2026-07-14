@@ -371,7 +371,10 @@ async function applyAnswersPatch(
   // OpenAI-compatible endpoint). When the key is missing, drop the override
   // entirely so the upstream local-LLM (Ollama) defaults survive for the
   // LOCAL_LLM=1 path.
-  if (demoName === "deep-research-demo" && !process.env.DEEPSEEK_KEY?.trim()) {
+  if (
+    demoName === "deep-research-demo" &&
+    !process.env.DEEPSEEK_KEY?.trim()
+  ) {
     const patchSetupAnswers = (
       patch as { setup_answers?: Record<string, unknown> }
     ).setup_answers;
@@ -413,7 +416,8 @@ async function applyAnswersPatch(
       merged as { setup_answers?: Record<string, unknown> }
     ).setup_answers ??= {});
     const weather = ((setupAnswers["weatherapi-pack"] as
-      Record<string, unknown> | undefined) ??= {});
+      | Record<string, unknown>
+      | undefined) ??= {});
     if (weatherApiKey) {
       weather["auth_param_get_weather_key"] = weatherApiKey;
       weather["auth_param_get_forecast_weather_key"] = weatherApiKey;
@@ -424,7 +428,8 @@ async function applyAnswersPatch(
       merged as { setup_answers?: Record<string, unknown> }
     ).setup_answers ??= {});
     const deepResearch = ((setupAnswers["deep-research-demo"] as
-      Record<string, unknown> | undefined) ??= {});
+      | Record<string, unknown>
+      | undefined) ??= {});
     const provider = deepResearch["provider"];
     const model = deepResearch["model"];
     const url = deepResearch["url"];
@@ -491,13 +496,10 @@ async function applyBundleLlm(
   if (llm) {
     const block = [`llm:`, `  provider: ${llm.provider}`];
     if (llm.model) block.push(`  model: ${llm.model}`);
-    if (llm.api_key_secret)
-      block.push(`  api_key_secret: ${llm.api_key_secret}`);
+    if (llm.api_key_secret) block.push(`  api_key_secret: ${llm.api_key_secret}`);
     if (llm.base_url) block.push(`  base_url: ${llm.base_url}`);
     if (llm.fast2flow_llm_min_confidence != null)
-      block.push(
-        `  fast2flow_llm_min_confidence: ${llm.fast2flow_llm_min_confidence}`,
-      );
+      block.push(`  fast2flow_llm_min_confidence: ${llm.fast2flow_llm_min_confidence}`);
     next = `${stripped.replace(/\n*$/, "")}\n${block.join("\n")}\n`;
   }
   if (next !== original) await writeFile(bundleYaml, next);
@@ -777,6 +779,8 @@ export const test = base.extend<{
           path: logFile,
           contentType: "text/plain",
         });
+        // Not in `created`, so the teardown loop below never sees it.
+        rmSync(testHome, { recursive: true, force: true });
         throw e;
       }
 

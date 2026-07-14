@@ -66,8 +66,8 @@ run_gtc_install() {
 # 2. Post binary-bifurcation (dev lane on crates.io, ~2026-04-24): `gtc-dev
 #    install` installs `<name>-dev` directly (e.g., `greentic-secrets-dev`)
 #    and no canonical-name binary exists. But the Playwright fixtures spawn
-#    canonical names (`greentic-secrets`, `greentic-start`) — see
-#    playwright/tests/_fixtures/gtc-demo.ts.
+#    canonical names — `gtc` (which in turn execs its own companions) and
+#    `greentic-secrets` — see playwright/tests/_fixtures/gtc-demo.ts.
 #    Fix: symlink `<name> → <name>-dev`.
 #
 # Stable is unaffected — `gtc install --channel stable` puts canonical names

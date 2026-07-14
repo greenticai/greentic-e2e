@@ -41,7 +41,12 @@ RUNTIME_LOG="${WORK_DIR}/runtime.log"
 RESPONSE_FILE="${WORK_DIR}/activities.json"
 
 cleanup() {
-  HOME="${RUNTIME_HOME:-}" gtc stop 2>/dev/null || echo "WARN: gtc stop failed ($?)" >&2
+  # Only stop if we got as far as creating the runtime HOME. An empty HOME would
+  # send `gtc stop` looking for .greentic under the cwd and could hit an
+  # unrelated runtime.
+  if [ -n "${RUNTIME_HOME:-}" ]; then
+    HOME="${RUNTIME_HOME}" gtc stop 2>/dev/null || echo "WARN: gtc stop failed ($?)" >&2
+  fi
   kill "${RUNTIME_PID:-}" 2>/dev/null || true
   sleep 1
   if [ -z "${KEEP_BUNDLE:-}" ]; then
