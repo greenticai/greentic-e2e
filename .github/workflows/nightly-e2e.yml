@@ -25,7 +25,7 @@ env:
   GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
   # Pinned Greentic toolchain release under test. Keep in sync with the
   # default in .github/actions/setup-greentic/action.yml.
-  GTC_RELEASE: '1.1.2'
+  GTC_RELEASE: '1.1.7'
   GREENTIC_TENANT: ${{ github.event.inputs.greentic_tenant || vars.GREENTIC_TENANT || '3point' }}
 
 jobs:
