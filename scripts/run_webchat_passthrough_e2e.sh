@@ -34,7 +34,11 @@ PROBE_PACK_SRC="${FIXTURES_DIR}/packs/webchat-passthrough-probe"
 ANSWERS_TEMPLATE="${FIXTURES_DIR}/wizard-answers/webchat-passthrough-bundle.json"
 PORT="${PORT:-8080}"
 
-WORK_DIR="$(mktemp -d -t greentic-webchat-attach-XXXXXX)"
+# WORK_DIR_BASE lets callers pin the scratch tree onto a real (non-symlinked)
+# path. gtc's operator-key writer rejects any symlinked ancestor, and macOS
+# `mktemp -t` ignores TMPDIR and lands under /var/folders (a symlink), which
+# aborts `gtc start`. CI's Linux /tmp is fine, so this only matters locally.
+WORK_DIR="$(mktemp -d "${WORK_DIR_BASE:-${TMPDIR:-/tmp}}/greentic-webchat-attach-XXXXXX")"
 BUNDLE_DIR="${WORK_DIR}/bundle"
 ANSWERS_FILE="${WORK_DIR}/answers.json"
 RUNTIME_LOG="${WORK_DIR}/runtime.log"

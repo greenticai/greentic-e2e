@@ -1,6 +1,7 @@
 {
   "greentic.events.email.sendgrid": {
     "enabled": true,
+    "messaging_provider_id": "events-email-sendgrid",
     "public_base_url": "${PUBLIC_BASE_URL}",
     "sendgrid_api_key": "${SENDGRID_API_KEY}",
     "from_email": "${SENDGRID_FROM_EMAIL}",

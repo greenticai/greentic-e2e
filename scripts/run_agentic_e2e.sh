@@ -246,6 +246,20 @@ if [[ "$DRY_RUN" == "true" ]]; then
   exit 0
 fi
 
+# Refuse to run against someone else's gateway. The readiness check below only
+# asks "is something answering on this port?", so a leftover greentic-start from
+# an earlier run happily satisfies it — and then the turn is driven against THAT
+# demo. This is not hypothetical: this test once passed on
+# "WeatherAPI is configured via secrets…", a reply from the weather demo.
+# Whatever is listening, it is not the bundle we just built, so stop.
+if curl -s -o /dev/null --max-time 2 "http://127.0.0.1:${GATEWAY_PORT}/" 2>/dev/null; then
+  die "something is already listening on 127.0.0.1:${GATEWAY_PORT} — refusing to start.
+  A stale greentic-start/greentic-runner would silently answer this test's traffic
+  and it would pass against the wrong demo. Kill it first:
+      pkill -f greentic-start; pkill -f greentic-runner
+  or point this run elsewhere with GREENTIC_GATEWAY_PORT=<free port>."
+fi
+
 # dw.agent runs with in-memory state when GREENTIC_AW_REDIS_URL is unset.
 GREENTIC_GATEWAY_PORT="${GATEWAY_PORT}" gtc start "${E2E_BUNDLE_DIR}" \
   --cloudflared off --ngrok off &

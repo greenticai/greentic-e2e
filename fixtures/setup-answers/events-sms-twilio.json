@@ -1,6 +1,7 @@
 {
   "greentic.events.sms.twilio": {
     "enabled": true,
+    "messaging_provider_id": "events-sms-twilio",
     "public_base_url": "${PUBLIC_BASE_URL}",
     "twilio": {
       "account_sid": "${TWILIO_ACCOUNT_SID}",
