@@ -45,7 +45,7 @@ install_dev() {
 
 # Pinned stable toolchain release; override with GTC_RELEASE. Keep in sync
 # with the default in .github/actions/setup-greentic/action.yml.
-GTC_RELEASE="${GTC_RELEASE:-1.1.7}"
+GTC_RELEASE="${GTC_RELEASE:-1.1.2}"
 
 run_gtc_install() {
   local bin="$1"
