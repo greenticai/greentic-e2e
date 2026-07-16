@@ -186,15 +186,15 @@ START_PID=$!
 log "Started gtc (PID: ${START_PID})"
 
 READY_TIMEOUT="${READY_TIMEOUT:-120}"
-HTTP_READY=false
+GTC_READY=false
 for i in $(seq 1 "${READY_TIMEOUT}"); do
-  if curl -sf -o /dev/null "http://127.0.0.1:${HTTP_PORT}/readyz" 2>/dev/null; then
-    HTTP_READY=true; log "PASS: gtc ready after ${i}s"; break
+  if grep -q "Press Ctrl+C to stop" "${E2E_LOG}" 2>/dev/null; then
+    GTC_READY=true; log "PASS: gtc ready after ${i}s"; break
   fi
   kill -0 "${START_PID}" 2>/dev/null || { log "FAIL: gtc exited early"; tail -30 "${E2E_LOG}"; exit 1; }
   sleep 1
 done
-if [[ "$HTTP_READY" != "true" ]]; then
+if [[ "$GTC_READY" != "true" ]]; then
   log "FAIL: gtc not ready after ${READY_TIMEOUT}s"
   tail -20 "${E2E_LOG}"
   exit 1
