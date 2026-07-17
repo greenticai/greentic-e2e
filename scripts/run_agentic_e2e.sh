@@ -344,6 +344,10 @@ status, body = call("POST", f"/v3/directline/conversations/{conv}/activities", m
 if status not in (200, 201):
     sys.stderr.write(f"send message failed: HTTP {status} {body}\n"); sys.exit(3)
 
+# Best-effort diagnostic: the last non-user reply that was not the answer, so a
+# deadline miss can say WHAT the worker sent instead of just "timed out".
+last_other = None
+
 for _ in range(max(1, deadline // 3)):
     time.sleep(3)
     status, body = call("GET", f"/v3/directline/conversations/{conv}/activities", None, token)
@@ -367,15 +371,26 @@ for _ in range(max(1, deadline // 3)):
             if marker in low:
                 sys.stderr.write(f"dw.agent returned an error reply: {text}\n")
                 sys.exit(5)
+        # The demo greets with a welcome/suggestions card ("What's new in AI this
+        # week?" …) as a non-user activity BEFORE it answers. That card is a
+        # legitimate intermediate reply — skip it and keep polling for the real
+        # answer. Treating the first non-user reply as THE answer races the
+        # greeting card and fails intermittently (the answer arrives seconds
+        # later, well within the deadline).
         if EXPECT and EXPECT.lower() not in low:
-            sys.stderr.write(
-                f"dw.agent replied but the answer looks wrong — expected to see "
-                f"{EXPECT!r} in: {text}\n"
-            )
-            sys.exit(6)
+            last_other = text
+            continue
         print(text)
         sys.exit(0)
 
+# Deadline reached. If we saw replies but never the expected answer, that is a
+# wrong-answer failure; report the last one. Otherwise nothing came back at all.
+if last_other is not None:
+    sys.stderr.write(
+        f"dw.agent replied but never produced the expected answer — expected to "
+        f"see {EXPECT!r}; last non-matching reply was: {last_other}\n"
+    )
+    sys.exit(6)
 sys.stderr.write("timed out waiting for a dw.agent reply\n")
 sys.exit(4)
 PY
