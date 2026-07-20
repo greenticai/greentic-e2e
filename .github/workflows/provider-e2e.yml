@@ -116,9 +116,20 @@ jobs:
           # as it does for many, so the message names the wrong cause).
           # The messaging/events matrices below have always run setup and get
           # a 200 rendered card back from that same welcome flow.
-          gtc setup --non-interactive \
+          if ! gtc setup --non-interactive \
             --answers fixtures/setup-answers/providers-combined.json \
-            "${E2E_BUNDLE_DIR}" < /dev/null
+            "${E2E_BUNDLE_DIR}" < /dev/null; then
+            # setup reports missing answers one field at a time, which makes a
+            # drifted fixture take one CI round per field to repair. Dump the
+            # authoritative template for the bundle as actually resolved.
+            echo "FAIL: gtc setup rejected fixtures/setup-answers/providers-combined.json."
+            echo "  Required answers for this bundle, per the resolved packs:"
+            gtc setup --dry-run --no-ui \
+              --emit-answers "${E2E_ROOT}/emitted-answers.json" \
+              "${E2E_BUNDLE_DIR}" < /dev/null || true
+            cat "${E2E_ROOT}/emitted-answers.json" 2>/dev/null || echo "  (no template emitted)"
+            exit 1
+          fi
 
       - name: Start services
         shell: bash
