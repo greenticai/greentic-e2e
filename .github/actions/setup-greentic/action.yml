@@ -98,4 +98,23 @@ runs:
       run: |
         set -euo pipefail
         export PATH="$HOME/.cargo/bin:$PATH"
-        gtc install --release "${{ inputs.gtc-release }}"
+        # `gtc install` prefetches ~15 packs/components from ghcr.io in one
+        # all-or-nothing loop: a single transient blob-fetch timeout aborts the
+        # whole install and fails the job (run 29672737770 died on one
+        # `error sending request for url .../incident-demo/blobs/...`).
+        # Retry the install as a unit. The prefetch skip-list is keyed off a
+        # release index that is only written after the loop fully succeeds, so a
+        # retry redoes the whole install (~40s) rather than resuming — cheap
+        # enough next to losing the matrix job.
+        attempt=1
+        max_attempts=3
+        until gtc install --release "${{ inputs.gtc-release }}"; do
+          if [[ "$attempt" -ge "$max_attempts" ]]; then
+            echo "gtc install failed after ${max_attempts} attempts" >&2
+            exit 1
+          fi
+          delay=$((attempt * 15))
+          echo "gtc install attempt ${attempt}/${max_attempts} failed; retrying in ${delay}s" >&2
+          sleep "${delay}"
+          attempt=$((attempt + 1))
+        done

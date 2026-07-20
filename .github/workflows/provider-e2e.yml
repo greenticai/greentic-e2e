@@ -106,11 +106,30 @@ jobs:
       - name: Setup providers
         shell: bash
         run: |
-          # Dummy providers don't require per-provider config — the wizard
-          # step above already registered them in bundle.yaml. Setup is a
-          # no-op here, kept for shape parity with the messaging / events
-          # matrices which still seed credentials via setup-answers.
-          echo "Dummy providers: setup skipped (registration done at wizard step)"
+          set -euo pipefail
+          # Setup is NOT a no-op for dummy providers, which is why this step
+          # used to just echo. Besides seeding provider config, `gtc setup`
+          # scaffolds default.gtpack — the welcome flow. Without it the bundle
+          # registers zero flows, an ingress POST has nothing to route to, and
+          # the runner answers 500 "flow type messaging is ambiguous; pack_id
+          # is required" (flow_by_type() returns None for zero matches exactly
+          # as it does for many, so the message names the wrong cause).
+          # The messaging/events matrices below have always run setup and get
+          # a 200 rendered card back from that same welcome flow.
+          if ! gtc setup --non-interactive \
+            --answers fixtures/setup-answers/providers-combined.json \
+            "${E2E_BUNDLE_DIR}" < /dev/null; then
+            # setup reports missing answers one field at a time, which makes a
+            # drifted fixture take one CI round per field to repair. Dump the
+            # authoritative template for the bundle as actually resolved.
+            echo "FAIL: gtc setup rejected fixtures/setup-answers/providers-combined.json."
+            echo "  Required answers for this bundle, per the resolved packs:"
+            gtc setup --dry-run --no-ui \
+              --emit-answers "${E2E_ROOT}/emitted-answers.json" \
+              "${E2E_BUNDLE_DIR}" < /dev/null || true
+            cat "${E2E_ROOT}/emitted-answers.json" 2>/dev/null || echo "  (no template emitted)"
+            exit 1
+          fi
 
       - name: Start services
         shell: bash
@@ -123,19 +142,27 @@ jobs:
             > "${E2E_ROOT}/start.log" 2>&1 &
           echo $! > "${E2E_ROOT}/start.pid"
 
+          # Probe by reading the status code directly. The previous gate piped
+          # `curl -sf` into grep: under `set -o pipefail`, curl's exit 22 on the
+          # root route's 404 propagated through the pipe, so the condition was
+          # false even once the runtime was serving. The gate never fired — every
+          # run burned the full 30s, printed the warning, and then raced a
+          # ~24-35s boot on the `sleep 3` below.
           echo "Waiting for services to start..."
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1 || \
-               curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ 2>/dev/null | grep -qE "^[2-4]"; then
-              echo "PASS: HTTP endpoint ready after ${i}s"
+          READY=false
+          for i in $(seq 1 90); do
+            CODE=$(curl -s -o /dev/null -m 5 -w "%{http_code}" http://127.0.0.1:8080/ || true)
+            if [[ "$CODE" =~ ^[2-4][0-9][0-9]$ ]]; then
+              echo "PASS: HTTP endpoint ready after ${i}s (HTTP ${CODE})"
+              READY=true
               break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "WARNING: HTTP endpoint not responding after 30s, continuing anyway"
-              cat "${E2E_ROOT}/start.log"
             fi
             sleep 1
           done
+          if [[ "$READY" != "true" ]]; then
+            echo "WARNING: HTTP endpoint not responding after 90s, continuing anyway"
+            cat "${E2E_ROOT}/start.log"
+          fi
 
           # Extra settle time
           sleep 3
@@ -169,11 +196,9 @@ jobs:
 
           # Per CLAUDE.md: "Provider tests accept 2xx-4xx HTTP responses
           # as passing (provider processed the request). Only 5xx or
-          # connection failures count as errors." messaging-dummy only
-          # declares `send`/`qa-spec`/`apply-answers`/`i18n-keys` ops — no
-          # `ingest_http` — so the server correctly refuses with
-          # 404 "domain disabled". That still proves the runtime is up and
-          # routing; treat it as PASS.
+          # connection failures count as errors." With setup run above, this
+          # routes to the scaffolded welcome flow and returns 200 with a
+          # rendered Adaptive Card, same as the messaging matrix.
           if [[ "$HTTP_CODE" =~ ^[234][0-9][0-9]$ ]]; then
             echo "PASS: messaging-dummy returned ${HTTP_CODE} (server reachable, routed)"
           else
@@ -200,9 +225,8 @@ jobs:
           echo "HTTP Status: ${HTTP_CODE}"
           echo "Response: ${BODY}"
 
-          # Same 2xx-4xx spec. events-dummy likewise has no ingest_http op;
-          # a 4xx with an "events domain disabled" / similar body is still
-          # a successful reachability + routing check.
+          # Same 2xx-4xx spec. Also routes to the scaffolded welcome flow —
+          # the events matrix gets the same 200 rendered card.
           if [[ "$HTTP_CODE" =~ ^[234][0-9][0-9]$ ]]; then
             echo "PASS: events-dummy returned ${HTTP_CODE} (server reachable, routed)"
           else
@@ -389,20 +413,25 @@ jobs:
             > "${ROOT}/start.log" 2>&1 &
           echo $! > "${ROOT}/start.pid"
 
-          # Wait for HTTP endpoint
+          # Wait for HTTP endpoint. Probe by reading the status code directly:
+          # the previous gate piped `curl -sf` into grep, and under
+          # `set -o pipefail` curl's exit 22 on the root route's 404 propagated
+          # through the pipe, so it never fired once the runtime was serving.
           echo "Waiting for services to start..."
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1 || \
-               curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ 2>/dev/null | grep -qE "^[2-4]"; then
-              echo "PASS: HTTP endpoint ready after ${i}s"
+          READY=false
+          for i in $(seq 1 90); do
+            CODE=$(curl -s -o /dev/null -m 5 -w "%{http_code}" http://127.0.0.1:8080/ || true)
+            if [[ "$CODE" =~ ^[2-4][0-9][0-9]$ ]]; then
+              echo "PASS: HTTP endpoint ready after ${i}s (HTTP ${CODE})"
+              READY=true
               break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "WARNING: HTTP endpoint not responding after 30s"
-              cat "${ROOT}/start.log"
             fi
             sleep 1
           done
+          if [[ "$READY" != "true" ]]; then
+            echo "WARNING: HTTP endpoint not responding after 90s"
+            cat "${ROOT}/start.log"
+          fi
           sleep 3
 
           START_PID=$(cat "${ROOT}/start.pid")
@@ -609,20 +638,25 @@ jobs:
             > "${ROOT}/start.log" 2>&1 &
           echo $! > "${ROOT}/start.pid"
 
-          # Wait for HTTP endpoint
+          # Wait for HTTP endpoint. Probe by reading the status code directly:
+          # the previous gate piped `curl -sf` into grep, and under
+          # `set -o pipefail` curl's exit 22 on the root route's 404 propagated
+          # through the pipe, so it never fired once the runtime was serving.
           echo "Waiting for services to start..."
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1 || \
-               curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ 2>/dev/null | grep -qE "^[2-4]"; then
-              echo "PASS: HTTP endpoint ready after ${i}s"
+          READY=false
+          for i in $(seq 1 90); do
+            CODE=$(curl -s -o /dev/null -m 5 -w "%{http_code}" http://127.0.0.1:8080/ || true)
+            if [[ "$CODE" =~ ^[2-4][0-9][0-9]$ ]]; then
+              echo "PASS: HTTP endpoint ready after ${i}s (HTTP ${CODE})"
+              READY=true
               break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "WARNING: HTTP endpoint not responding after 30s"
-              cat "${ROOT}/start.log"
             fi
             sleep 1
           done
+          if [[ "$READY" != "true" ]]; then
+            echo "WARNING: HTTP endpoint not responding after 90s"
+            cat "${ROOT}/start.log"
+          fi
           sleep 3
 
           START_PID=$(cat "${ROOT}/start.pid")
