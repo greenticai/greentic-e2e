@@ -2,6 +2,7 @@
   "messaging-dummy": {
     "enabled": true,
     "api_token": "e2e-dummy-api-token",
-    "endpoint_url": "https://example.invalid/e2e-dummy"
+    "endpoint_url": "https://example.invalid/e2e-dummy",
+    "dummy_token": "e2e-dummy-conformance-token"
   }
 }
