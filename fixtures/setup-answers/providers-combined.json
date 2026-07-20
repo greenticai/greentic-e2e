@@ -5,9 +5,5 @@
     "endpoint_url": "https://example.invalid/e2e-dummy",
     "dummy_token": "e2e-dummy-conformance-token"
   },
-  "greentic.events.provider.dummy": {
-    "enabled": true,
-    "event_type": "test-event",
-    "poll_interval_ms": 1000
-  }
+  "greentic.events.provider.dummy": {}
 }
