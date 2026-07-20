@@ -123,19 +123,27 @@ jobs:
             > "${E2E_ROOT}/start.log" 2>&1 &
           echo $! > "${E2E_ROOT}/start.pid"
 
+          # Probe by reading the status code directly. The previous gate piped
+          # `curl -sf` into grep: under `set -o pipefail`, curl's exit 22 on the
+          # root route's 404 propagated through the pipe, so the condition was
+          # false even once the runtime was serving. The gate never fired — every
+          # run burned the full 30s, printed the warning, and then raced a
+          # ~24-35s boot on the `sleep 3` below.
           echo "Waiting for services to start..."
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1 || \
-               curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ 2>/dev/null | grep -qE "^[2-4]"; then
-              echo "PASS: HTTP endpoint ready after ${i}s"
+          READY=false
+          for i in $(seq 1 90); do
+            CODE=$(curl -s -o /dev/null -m 5 -w "%{http_code}" http://127.0.0.1:8080/ || true)
+            if [[ "$CODE" =~ ^[2-4][0-9][0-9]$ ]]; then
+              echo "PASS: HTTP endpoint ready after ${i}s (HTTP ${CODE})"
+              READY=true
               break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "WARNING: HTTP endpoint not responding after 30s, continuing anyway"
-              cat "${E2E_ROOT}/start.log"
             fi
             sleep 1
           done
+          if [[ "$READY" != "true" ]]; then
+            echo "WARNING: HTTP endpoint not responding after 90s, continuing anyway"
+            cat "${E2E_ROOT}/start.log"
+          fi
 
           # Extra settle time
           sleep 3
@@ -389,20 +397,25 @@ jobs:
             > "${ROOT}/start.log" 2>&1 &
           echo $! > "${ROOT}/start.pid"
 
-          # Wait for HTTP endpoint
+          # Wait for HTTP endpoint. Probe by reading the status code directly:
+          # the previous gate piped `curl -sf` into grep, and under
+          # `set -o pipefail` curl's exit 22 on the root route's 404 propagated
+          # through the pipe, so it never fired once the runtime was serving.
           echo "Waiting for services to start..."
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1 || \
-               curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ 2>/dev/null | grep -qE "^[2-4]"; then
-              echo "PASS: HTTP endpoint ready after ${i}s"
+          READY=false
+          for i in $(seq 1 90); do
+            CODE=$(curl -s -o /dev/null -m 5 -w "%{http_code}" http://127.0.0.1:8080/ || true)
+            if [[ "$CODE" =~ ^[2-4][0-9][0-9]$ ]]; then
+              echo "PASS: HTTP endpoint ready after ${i}s (HTTP ${CODE})"
+              READY=true
               break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "WARNING: HTTP endpoint not responding after 30s"
-              cat "${ROOT}/start.log"
             fi
             sleep 1
           done
+          if [[ "$READY" != "true" ]]; then
+            echo "WARNING: HTTP endpoint not responding after 90s"
+            cat "${ROOT}/start.log"
+          fi
           sleep 3
 
           START_PID=$(cat "${ROOT}/start.pid")
@@ -609,20 +622,25 @@ jobs:
             > "${ROOT}/start.log" 2>&1 &
           echo $! > "${ROOT}/start.pid"
 
-          # Wait for HTTP endpoint
+          # Wait for HTTP endpoint. Probe by reading the status code directly:
+          # the previous gate piped `curl -sf` into grep, and under
+          # `set -o pipefail` curl's exit 22 on the root route's 404 propagated
+          # through the pipe, so it never fired once the runtime was serving.
           echo "Waiting for services to start..."
-          for i in $(seq 1 30); do
-            if curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1 || \
-               curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ 2>/dev/null | grep -qE "^[2-4]"; then
-              echo "PASS: HTTP endpoint ready after ${i}s"
+          READY=false
+          for i in $(seq 1 90); do
+            CODE=$(curl -s -o /dev/null -m 5 -w "%{http_code}" http://127.0.0.1:8080/ || true)
+            if [[ "$CODE" =~ ^[2-4][0-9][0-9]$ ]]; then
+              echo "PASS: HTTP endpoint ready after ${i}s (HTTP ${CODE})"
+              READY=true
               break
-            fi
-            if [ "$i" -eq 30 ]; then
-              echo "WARNING: HTTP endpoint not responding after 30s"
-              cat "${ROOT}/start.log"
             fi
             sleep 1
           done
+          if [[ "$READY" != "true" ]]; then
+            echo "WARNING: HTTP endpoint not responding after 90s"
+            cat "${ROOT}/start.log"
+          fi
           sleep 3
 
           START_PID=$(cat "${ROOT}/start.pid")

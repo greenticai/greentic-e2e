@@ -437,11 +437,14 @@ if [[ "$SKIP_START" != "true" ]]; then
 
     # Wait for HTTP endpoint
     log "Waiting for HTTP endpoint..."
+    # Read the status code directly rather than piping `curl -sf` into grep:
+    # under `set -o pipefail` curl's exit 22 on the root route's 404 propagates
+    # through the pipe, so the gate never fires once the runtime is serving.
     HTTP_READY=false
-    for i in $(seq 1 30); do
-      if curl -sf http://127.0.0.1:8080/ > /dev/null 2>&1 || \
-         curl -sf -o /dev/null -w "%{http_code}" http://127.0.0.1:8080/ 2>/dev/null | grep -qE "^[2-4]"; then
-        log "PASS: HTTP endpoint ready after ${i}s"
+    for i in $(seq 1 90); do
+      CODE=$(curl -s -o /dev/null -m 5 -w "%{http_code}" http://127.0.0.1:8080/ || true)
+      if [[ "$CODE" =~ ^[2-4][0-9][0-9]$ ]]; then
+        log "PASS: HTTP endpoint ready after ${i}s (HTTP ${CODE})"
         HTTP_READY=true
         break
       fi
@@ -449,7 +452,7 @@ if [[ "$SKIP_START" != "true" ]]; then
     done
 
     if [[ "$HTTP_READY" != "true" ]]; then
-      log "Warning: HTTP endpoint not responding after 30s"
+      log "Warning: HTTP endpoint not responding after 90s"
     fi
     sleep 3
 
