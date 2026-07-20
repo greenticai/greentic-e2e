@@ -106,11 +106,19 @@ jobs:
       - name: Setup providers
         shell: bash
         run: |
-          # Dummy providers don't require per-provider config — the wizard
-          # step above already registered them in bundle.yaml. Setup is a
-          # no-op here, kept for shape parity with the messaging / events
-          # matrices which still seed credentials via setup-answers.
-          echo "Dummy providers: setup skipped (registration done at wizard step)"
+          set -euo pipefail
+          # Setup is NOT a no-op for dummy providers, which is why this step
+          # used to just echo. Besides seeding provider config, `gtc setup`
+          # scaffolds default.gtpack — the welcome flow. Without it the bundle
+          # registers zero flows, an ingress POST has nothing to route to, and
+          # the runner answers 500 "flow type messaging is ambiguous; pack_id
+          # is required" (flow_by_type() returns None for zero matches exactly
+          # as it does for many, so the message names the wrong cause).
+          # The messaging/events matrices below have always run setup and get
+          # a 200 rendered card back from that same welcome flow.
+          gtc setup --non-interactive \
+            --answers fixtures/setup-answers/providers-combined.json \
+            "${E2E_BUNDLE_DIR}" < /dev/null
 
       - name: Start services
         shell: bash
@@ -177,11 +185,9 @@ jobs:
 
           # Per CLAUDE.md: "Provider tests accept 2xx-4xx HTTP responses
           # as passing (provider processed the request). Only 5xx or
-          # connection failures count as errors." messaging-dummy only
-          # declares `send`/`qa-spec`/`apply-answers`/`i18n-keys` ops — no
-          # `ingest_http` — so the server correctly refuses with
-          # 404 "domain disabled". That still proves the runtime is up and
-          # routing; treat it as PASS.
+          # connection failures count as errors." With setup run above, this
+          # routes to the scaffolded welcome flow and returns 200 with a
+          # rendered Adaptive Card, same as the messaging matrix.
           if [[ "$HTTP_CODE" =~ ^[234][0-9][0-9]$ ]]; then
             echo "PASS: messaging-dummy returned ${HTTP_CODE} (server reachable, routed)"
           else
@@ -208,9 +214,8 @@ jobs:
           echo "HTTP Status: ${HTTP_CODE}"
           echo "Response: ${BODY}"
 
-          # Same 2xx-4xx spec. events-dummy likewise has no ingest_http op;
-          # a 4xx with an "events domain disabled" / similar body is still
-          # a successful reachability + routing check.
+          # Same 2xx-4xx spec. Also routes to the scaffolded welcome flow —
+          # the events matrix gets the same 200 rendered card.
           if [[ "$HTTP_CODE" =~ ^[234][0-9][0-9]$ ]]; then
             echo "PASS: events-dummy returned ${HTTP_CODE} (server reachable, routed)"
           else
