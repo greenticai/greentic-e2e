@@ -13,7 +13,7 @@ Ten workflows run nightly (or on-demand) via GitHub Actions:
 3. **Cloud Demo E2E** (`cloud-demo-e2e.yml`, 02:00 UTC) - Cloud demo lifecycle: `gtc wizard`, `gtc setup --non-interactive`, `gtc start --target <aws|azure|gcp>`, web UI verification, optional admin tunnel verification, and `gtc stop --destroy`.
 4. **Store Dual-Publish E2E** (`store-dual-publish-e2e.yml`, 01:30 UTC) - Store agentic-worker lifecycle `publish -> install -> run` against real Postgres + MinIO + the store container. Designer side is simulated via curl; verifies the publish/list/detail/artifact/run API contracts, the install-back byte-equality invariant, and the run-from-store admin hand-off. SKIPS (not fails) when the GHCR store image is not pullable.
 5. **Telemetry E2E** (`telemetry-e2e.yml`, 01:00 UTC) - Boots a file-export OpenTelemetry Collector, starts a dummy-provider bundle with `TELEMETRY_EXPORT`/`OTLP_ENDPOINT` pointed at it, drives traffic, and asserts the collector's JSON dump contains OTLP **logs** for the configured `service.name`. Requires Docker.
-6. **WebChat Passthrough E2E** (`webchat-passthrough-e2e.yml`) - Regression guard for the WebChat DirectLine envelope passthrough contract (attachments / channelData / entities). Runs the full stack against a minimal probe pack.
+6. **WebChat Passthrough E2E** (`webchat-passthrough-e2e.yml`, 01:00 UTC) - Regression guard for the WebChat DirectLine envelope passthrough contract (attachments / channelData / entities). Runs the full stack against a minimal probe pack. Note: shares the 01:00 UTC slot with Telemetry E2E.
 7. **Demo Playwright E2E** (`demo-playwright.yml`, 03:30 UTC) - Browser-driven demo site tests via Playwright. See `playwright/` sub-package.
 8. **Notify Scheduled Failures** (`notify-scheduled-failures.yml`) - Alerts on nightly workflow failures.
 9. **CodeQL** (`codeql.yml`) - GitHub code scanning.
@@ -218,3 +218,5 @@ Full list of all secret env vars is in `.secrets-provider.example`.
 ## Playwright sub-package
 
 Browser-driven demo e2e lives under `playwright/`. See `playwright/README.md` for local dev workflow and `docs/superpowers/specs/2026-04-27-playwright-demo-e2e-design.md` for design.
+
+`docs/superpowers/` contains implementation plans (`plans/`) and design specs (`specs/`) for major e2e test additions.
