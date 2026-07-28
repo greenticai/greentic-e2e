@@ -2,7 +2,7 @@ name: Setup Greentic
 description: >-
   Shared toolchain bootstrap for the e2e workflows: pins Rust, installs
   cargo-binstall, installs the gtc CLI, and installs the pinned Greentic
-  toolchain release. Every step exports GITHUB_TOKEN so cargo-binstall's
+  toolchain release's binaries. Every step exports GITHUB_TOKEN so cargo-binstall's
   api.github.com release lookups are authenticated — unauthenticated calls
   from shared runner IPs hit 403 rate limits, fall back to multi-minute
   source builds, and have timed out whole matrix jobs.
@@ -26,7 +26,11 @@ inputs:
     description: Install the gtc CLI via cargo-binstall
     default: 'true'
   install-toolchain:
-    description: Run `gtc install --release <gtc-release>` after installing the CLI
+    description: >-
+      Run `gtc install --release <gtc-release> --install-binaries-only` after
+      installing the CLI. Binaries only: the release pack/component prefetch is
+      unused here and is the workflows' main source of transient ghcr.io
+      failures — see the step body.
     default: 'true'
 
 runs:
@@ -98,17 +102,33 @@ runs:
       run: |
         set -euo pipefail
         export PATH="$HOME/.cargo/bin:$PATH"
-        # `gtc install` prefetches ~15 packs/components from ghcr.io in one
-        # all-or-nothing loop: a single transient blob-fetch timeout aborts the
-        # whole install and fails the job (run 29672737770 died on one
-        # `error sending request for url .../incident-demo/blobs/...`).
-        # Retry the install as a unit. The prefetch skip-list is keyed off a
-        # release index that is only written after the loop fully succeeds, so a
-        # retry redoes the whole install (~40s) rather than resuming — cheap
-        # enough next to losing the matrix job.
+        # `--install-binaries-only` skips `gtc install`'s second phase: an
+        # all-or-nothing prefetch of every pack and component in the pinned
+        # release (92 ghcr.io blob pulls for 1.1.2). One transient blob error
+        # anywhere in that loop aborts the whole install, and the skip-list is
+        # keyed off a release index that is only written after the loop fully
+        # succeeds — so the retry below redoes all 92 pulls instead of resuming.
+        # Run 30326880926 lost messaging-teams exactly that way: three attempts,
+        # three different packs, each `error sending request for url
+        # https://ghcr.io/v2/.../blobs/sha256:...`.
+        #
+        # Nothing downstream reads that prefetch. Every e2e bundle names its
+        # packs by explicit `oci://ghcr.io/...:latest` reference and caches them
+        # workspace-local, so the packs are pulled on demand at `gtc wizard`
+        # time either way; the release index only maps the `:stable` channel
+        # tag, which no fixture uses. Verified by running the dummy-provider job
+        # both ways: identical ingress responses and start.log, ~/.greentic left
+        # at 36K instead of 1.3G, ~92 ghcr blob pulls per job down to 0.
+        #
+        # `gtc install` itself is still covered — nightly-e2e.yml runs the full
+        # unflagged install as its test subject and passes install-toolchain:
+        # false here. Self-update to the pinned gtc still happens: it is gated
+        # on the binaries phase, not the artifact phase.
+        #
+        # The retry stays for the binary downloads, which still hit the network.
         attempt=1
         max_attempts=3
-        until gtc install --release "${{ inputs.gtc-release }}"; do
+        until gtc install --release "${{ inputs.gtc-release }}" --install-binaries-only; do
           if [[ "$attempt" -ge "$max_attempts" ]]; then
             echo "gtc install failed after ${max_attempts} attempts" >&2
             exit 1
