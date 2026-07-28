@@ -74,7 +74,9 @@ Requires `gtc` CLI installed (`cargo binstall gtc`). For providers with secrets,
 
 ### CI toolchain bootstrap
 
-All workflows share `.github/actions/setup-greentic` (Rust pin, cargo-binstall with authenticated GitHub API lookups, gtc CLI, `gtc install --release <pin>`). The pinned Greentic toolchain release lives in that action's `gtc-release` default (and is mirrored in `nightly-e2e.yml`'s `GTC_RELEASE` env and `playwright/scripts/bootstrap-gtc.sh`) — bump those together to roll every workflow forward.
+All workflows share `.github/actions/setup-greentic` (Rust pin, cargo-binstall with authenticated GitHub API lookups, gtc CLI, `gtc install --release <pin> --install-binaries-only`). The pinned Greentic toolchain release lives in that action's `gtc-release` default (and is mirrored in `nightly-e2e.yml`'s `GTC_RELEASE` env and `playwright/scripts/bootstrap-gtc.sh`) — bump those together to roll every workflow forward.
+
+**Binaries only, deliberately.** The unflagged `gtc install` also prefetches every pack and component in the pinned release — 92 ghcr.io blob pulls for 1.1.2 — in one all-or-nothing loop whose skip-list (the release index) is only written after the loop fully succeeds. A single transient blob error therefore fails the job, and the action's retry redoes all 92 pulls. No workflow reads that prefetch: fixtures name their packs by explicit `oci://ghcr.io/...:latest` reference and cache them workspace-local, while the release index only maps the `:stable` channel tag. `nightly-e2e.yml` is where the full `gtc install` is exercised — it passes `install-toolchain: false` here and runs the unflagged install itself.
 
 ### Nightly Tests Locally (Docker/Act)
 
