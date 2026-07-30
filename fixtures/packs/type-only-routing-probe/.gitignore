@@ -1,0 +1,4 @@
+/components/*/target/
+/components/*/Cargo.lock
+/dist/
+/pack.lock.cbor

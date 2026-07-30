@@ -2,6 +2,10 @@
 .secrets-provider
 .worktrees/
 
+# Local gtc run scratch (wizard runs, resolver cache) from running the e2e
+# harnesses locally — never a committed artifact.
+.greentic/
+
 # OS
 .DS_Store
 

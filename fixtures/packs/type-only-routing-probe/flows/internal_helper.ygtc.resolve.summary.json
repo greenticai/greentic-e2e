@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "flow": "internal_helper.ygtc",
+  "nodes": {
+    "com_example_bug3-test": {
+      "component_id": "com.example.bug3-test",
+      "source": {
+        "kind": "local",
+        "path": "../components/bug3-test/target/wasm32-wasip2/release/bug3_test.wasm"
+      },
+      "digest": "sha256:28b8fa742befc72aa6b87e36bf9c192f4fefc8d5ea62daabc2d4abbe92f01aef",
+      "manifest": {
+        "world": "greentic:component/component@0.6.0",
+        "version": "0.1.0"
+      }
+    }
+  }
+}

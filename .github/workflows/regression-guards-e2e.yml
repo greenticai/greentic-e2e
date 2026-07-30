@@ -1,0 +1,124 @@
+name: Regression Guards E2E
+
+# Track-A regression guards for the July 2026 binary incident — three e2e tests,
+# each pinned to a specific shipped fix that our prior suite failed to catch:
+#
+#   * type-only-routing    → greentic-runner #611: type-only provider ingress
+#                            must resolve to the ENTRY flow when a pack ships
+#                            more than one flow of the same type (not bail
+#                            "flow type X is ambiguous; pack_id is required").
+#   * tenant-binding       → greentic-setup #232: env-deploy must stamp
+#                            route_binding.tenant_selector under the setup
+#                            tenant (pre-fix the key was absent and the tenant
+#                            silently defaulted).
+#   * webchat-reply-parity → greentic-start #438: the env/revision serve arm
+#                            (`gtc start <archive.gtbundle>`) must shape replies
+#                            through the shared parse_envelopes shaper, at parity
+#                            with the legacy `--bundle` dir arm — no dropping
+#                            cards/attachments/channelData to the placeholder.
+#
+# Each guard walks the full wire path so it catches the regression regardless of
+# which repo reintroduces it. They are grouped here (rather than three files) as
+# one cohesive incident-guard set; jobs fail independently (fail-fast: false).
+# A scheduled failure is picked up by notify-scheduled-failures.yml (workflows: ["*"]).
+
+on:
+  schedule:
+    # 00:45 UTC — a gap between nightly-e2e (00:00) / provider-e2e (00:30) and
+    # telemetry+passthrough (01:00) to avoid GHA runner contention.
+    - cron: "45 0 * * *"
+  workflow_dispatch:
+    inputs:
+      gtc_version:
+        description: "gtc version (default: latest)"
+        required: false
+        default: "latest"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GTC_VERSION: ${{ github.event.inputs.gtc_version || 'latest' }}
+
+jobs:
+  guard:
+    name: ${{ matrix.guard }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - guard: type-only-routing
+            script: run_type_only_routing_e2e.sh
+            glob: greentic-type-routing-*
+            artifact: type-only-routing-diagnostics
+          - guard: tenant-binding
+            script: run_tenant_binding_e2e.sh
+            glob: greentic-tenant-binding-*
+            artifact: tenant-binding-diagnostics
+          - guard: webchat-reply-parity
+            script: run_webchat_reply_parity_e2e.sh
+            glob: greentic-webchat-parity-*
+            artifact: webchat-reply-parity-diagnostics
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        shell: bash
+        run: |
+          # squashfs-tools: greentic-bundle needs mksquashfs to emit .gtbundle.
+          # jq, lsof, curl: used by the e2e driver scripts.
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq squashfs-tools jq lsof curl
+
+      - name: Set up Greentic toolchain
+        uses: ./.github/actions/setup-greentic
+        with:
+          gtc-version: ${{ env.GTC_VERSION }}
+
+      - name: Install companion CLIs
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
+          cargo binstall -y cargo-component greentic-secrets greentic-pack
+
+      - name: Run ${{ matrix.guard }} e2e
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$HOME/.cargo/bin:$PATH"
+          # Keep the generated bundle/work dir on failure so the next step can
+          # stage the runtime/deploy log + wire response as an artifact.
+          KEEP_BUNDLE=1 bash "scripts/${{ matrix.script }}"
+
+      - name: Stage diagnostics on failure
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Glob in /tmp doesn't always resolve inside upload-artifact@v4 on
+          # containerised runners; copy to a known workspace path first.
+          mkdir -p ./diagnostics
+          for d in /tmp/${{ matrix.glob }}/; do
+            [ -d "$d" ] || continue
+            name="$(basename "$d")"
+            cp -r "$d" "./diagnostics/${name}/" 2>/dev/null || true
+          done
+          find ./diagnostics -type f | head
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ./diagnostics
+          if-no-files-found: warn
+          retention-days: 7
