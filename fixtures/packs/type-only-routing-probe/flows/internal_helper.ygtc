@@ -1,0 +1,15 @@
+id: internal_helper
+title: Internal helper (must never win a type-only route)
+description: Same-type helper flow; tagged internal so it cannot win type-only routing
+type: messaging
+start: com_example_bug3-test
+parameters: {}
+tags:
+- internal
+schema_version: 2
+entrypoints: {}
+nodes:
+  com_example_bug3-test:
+    routing: out
+    probe:
+      text: '{{in.input.text}}'

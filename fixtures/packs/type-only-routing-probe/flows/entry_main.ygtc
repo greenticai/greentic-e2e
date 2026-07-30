@@ -1,0 +1,14 @@
+id: entry_main
+title: Type-only routing entry
+description: Entry flow that must win a type-only messaging ingress
+type: messaging
+start: com_example_bug3-test
+parameters: {}
+tags: []
+schema_version: 2
+entrypoints: {}
+nodes:
+  com_example_bug3-test:
+    routing: out
+    probe:
+      text: '{{in.input.text}}'
