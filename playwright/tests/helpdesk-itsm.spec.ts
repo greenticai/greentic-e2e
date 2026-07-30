@@ -1,5 +1,9 @@
 import { test, expect } from "./_fixtures/gtc-demo";
 import { WebChat } from "./_fixtures/webchat-page";
+import {
+  deepseekKnownBroken,
+  DEEPSEEK_KNOWN_BROKEN_REASON,
+} from "./_fixtures/llm-preflight";
 
 const ERROR_MARKERS = /error|exception|panic|stack trace|something went wrong/i;
 
@@ -68,6 +72,10 @@ test.describe("helpdesk-itsm demo (Phase 0 walking skeleton)", () => {
     page,
     gtcDemo,
   }) => {
+    // No live preflight here (unlike deep-research/pet-daycare), so honour the
+    // known-broken flag explicitly or a dead key would fail this on the bot
+    // reply instead of skipping.
+    test.skip(deepseekKnownBroken(), DEEPSEEK_KNOWN_BROKEN_REASON);
     const demo = await gtcDemo({
       name: "helpdesk-itsm",
       skipIfMissingSecrets: ["DEEPSEEK_KEY"],

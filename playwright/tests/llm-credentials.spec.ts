@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { checkDeepseekLlm } from "./_fixtures/llm-preflight";
+import {
+  checkDeepseekLlm,
+  deepseekKnownBroken,
+  DEEPSEEK_KNOWN_BROKEN_REASON,
+} from "./_fixtures/llm-preflight";
 
 // Dedicated credential-health canary — deliberately NOT using the `gtcDemo`
 // fixture, so it needs no bundle setup and no browser page. It's one HTTP
@@ -18,6 +22,11 @@ test.describe("LLM credentials", () => {
   test("DEEPSEEK_KEY answers a live call (not invalid, revoked, or rate-limited)", async () => {
     const key = process.env.DEEPSEEK_KEY?.trim();
     test.skip(!key, "DEEPSEEK_KEY not set — nothing to validate");
+    // When we already know the key is dead (account balance, revoked, upstream
+    // contract change) we stand the canary down rather than let it paint the
+    // nightly red every run. This is the ONE place the "one red line" becomes a
+    // deliberate skip; unset DEEPSEEK_KNOWN_BROKEN to restore the alarm.
+    test.skip(deepseekKnownBroken(), DEEPSEEK_KNOWN_BROKEN_REASON);
 
     const result = await checkDeepseekLlm();
     expect(result.ok, result.ok ? undefined : result.reason).toBe(true);
