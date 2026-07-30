@@ -123,14 +123,12 @@ jobs:
           # is a native greentic-llm provider (pet-daycare's fast2flow tier) and
           # an OpenAI-compatible endpoint (deep-research/helpdesk component-llm).
           DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
-          # TEMPORARY: the DEEPSEEK_KEY is currently non-functional (nightly
-          # 2026-07-26 got HTTP 400 — account balance / upstream contract, not a
-          # code bug). Stand the LLM-dependent tests + credential canary down so
-          # the nightly stops going red for something we can't fix in this repo.
-          # A repo variable can override without a code change; the default keeps
-          # it stood down. REMOVE this once the key is restored so the canary
-          # resumes catching a genuinely broken secret.
-          DEEPSEEK_KNOWN_BROKEN: ${{ vars.DEEPSEEK_KNOWN_BROKEN || '1' }}
+          # Opt-in stand-down for when the DEEPSEEK_KEY is non-functional (it
+          # flaked HTTP 400 on 2026-07-26, recovered by 07-30). Default OFF so the
+          # canary keeps guarding a working key; set the repo variable
+          # DEEPSEEK_KNOWN_BROKEN=1 to skip the LLM-dependent tests + canary with
+          # no code change when it is genuinely down, and clear it once restored.
+          DEEPSEEK_KNOWN_BROKEN: ${{ vars.DEEPSEEK_KNOWN_BROKEN }}
         run: npx playwright test --project="${GTC_CHANNEL}"
 
       - name: Upload Playwright report
