@@ -70,6 +70,11 @@ jobs:
           GREENTIC_LLM_PROVIDER: ${{ vars.GREENTIC_LLM_PROVIDER || 'deepseek' }}
           GREENTIC_LLM_MODEL: ${{ vars.GREENTIC_LLM_MODEL || 'deepseek-chat' }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
+          # Opt-in stand-down: when the DeepSeek key is non-functional, set the
+          # repo variable DEEPSEEK_KNOWN_BROKEN=1 and the script SKIPs (exit 0)
+          # instead of failing the agent turn. Default OFF so dw.agent stays
+          # guarded while the key works; clear the variable once restored.
+          DEEPSEEK_KNOWN_BROKEN: ${{ vars.DEEPSEEK_KNOWN_BROKEN }}
           GREENTIC_AGENTIC_BUNDLE_SOURCE: ${{ github.event.inputs.bundle_source || vars.GREENTIC_AGENTIC_BUNDLE_SOURCE || '' }}
           VERBOSE: 'true'
         run: |

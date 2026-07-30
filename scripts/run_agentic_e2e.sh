@@ -51,6 +51,19 @@ AGENT_PROMPT="${GREENTIC_AGENT_PROMPT:-In one short sentence, what is the capita
 # merely that some bytes came back. Tied to AGENT_PROMPT — override both together.
 AGENT_EXPECT="${GREENTIC_AGENT_EXPECT:-Tokyo}"
 
+# Known-broken LLM key escape hatch. When the DeepSeek key is flagged
+# non-functional (out of balance, revoked, upstream contract change), stand this
+# test down with a graceful SKIP instead of letting the live agent turn fail —
+# the worker can't answer without a working LLM, and that's not a regression in
+# this repo. Mirrors the Playwright DEEPSEEK_KNOWN_BROKEN opt-out. Unset it once
+# the key works to restore the guard.
+case "$(printf '%s' "${DEEPSEEK_KNOWN_BROKEN:-}" | tr '[:upper:]' '[:lower:]')" in
+  1|true|yes)
+    echo "SKIP: DEEPSEEK_KNOWN_BROKEN set — DeepSeek key flagged non-functional; standing the agentic-worker e2e down (unset DEEPSEEK_KNOWN_BROKEN to restore)."
+    exit 0
+    ;;
+esac
+
 # Setup answers. Default to the demo's OWN published answers rather than a
 # vendored copy: greentic-demo ships <demo>-setup-answers.json next to the
 # bundle, already parameterised with ${GREENTIC_LLM_API_KEY} / ${TAVILY_API_KEY}

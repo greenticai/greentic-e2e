@@ -11,6 +11,29 @@ export type LlmPreflightResult = { ok: true } | { ok: false; reason: string };
 
 const PREFLIGHT_TIMEOUT_MS = 10_000;
 
+/**
+ * Escape hatch for when the DEEPSEEK_KEY is *known* to be non-functional — the
+ * DeepSeek account is out of balance, the key was revoked, or the upstream API
+ * contract changed — and we've chosen to stand the LLM-dependent tests down
+ * rather than let the nightly go red on every run for something a code change
+ * can't fix. Set `DEEPSEEK_KNOWN_BROKEN=1` (or true/yes) and every DeepSeek
+ * preflight short-circuits to a skip with a loud, self-explaining reason
+ * instead of a live probe; the credential canary skips instead of failing.
+ *
+ * This is deliberately opt-in and reversible: unset it (or set 0) the moment
+ * the key works again and the canary resumes catching a genuinely broken
+ * secret. It does NOT affect the LOCAL_LLM=1 / Ollama path, which never touches
+ * DeepSeek.
+ */
+export function deepseekKnownBroken(): boolean {
+  const v = process.env.DEEPSEEK_KNOWN_BROKEN?.trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+export const DEEPSEEK_KNOWN_BROKEN_REASON =
+  "DEEPSEEK_KNOWN_BROKEN set — DeepSeek key flagged non-functional; LLM tests stood " +
+  "down on purpose. Unset DEEPSEEK_KNOWN_BROKEN once the key works to restore the guard.";
+
 async function probeChatCompletions(
   url: string,
   apiKey: string,
@@ -33,9 +56,19 @@ async function probeChatCompletions(
       signal: controller.signal,
     });
     if (res.ok) return { ok: true };
+    // DeepSeek/OpenAI-compatible endpoints check auth BEFORE validating the
+    // body, so a bad key short-circuits to 401 and a 400 means the request was
+    // authenticated but the body/params were rejected. Either way the JSON
+    // error body carries the only actionable detail (invalid_request_error vs
+    // insufficient balance vs unknown model), so surface it — a bare status
+    // code leaves you guessing whether it's a dead secret or a broken request
+    // shape. Truncated so a huge/HTML error page can't flood the log.
+    const detail = (await res.text().catch(() => "")).trim();
     return {
       ok: false,
-      reason: `LLM preflight failed: HTTP ${res.status} from ${url}`,
+      reason: `LLM preflight failed: HTTP ${res.status} from ${url}${
+        detail ? ` — ${detail.slice(0, 600)}` : ""
+      }`,
     };
   } catch (err) {
     return {
@@ -90,6 +123,10 @@ export async function checkDeepResearchLlm(): Promise<LlmPreflightResult> {
   if (process.env.LOCAL_LLM === "1") {
     return probeOllama("gemma3");
   }
+  // Only short-circuit the DeepSeek path — the Ollama path above is unaffected.
+  if (deepseekKnownBroken()) {
+    return { ok: false, reason: DEEPSEEK_KNOWN_BROKEN_REASON };
+  }
   const key = process.env.DEEPSEEK_KEY?.trim();
   if (!key) {
     return { ok: false, reason: "needs DEEPSEEK_KEY or LOCAL_LLM=1" };
@@ -106,6 +143,9 @@ export async function checkDeepResearchLlm(): Promise<LlmPreflightResult> {
  * native ProviderKind::Deepseek, which does call api.deepseek.com for real.
  */
 export async function checkDeepseekLlm(): Promise<LlmPreflightResult> {
+  if (deepseekKnownBroken()) {
+    return { ok: false, reason: DEEPSEEK_KNOWN_BROKEN_REASON };
+  }
   const key = process.env.DEEPSEEK_KEY?.trim();
   if (!key) {
     return { ok: false, reason: "DEEPSEEK_KEY not set" };
