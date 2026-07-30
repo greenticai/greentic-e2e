@@ -43,14 +43,24 @@ install_dev() {
   "$HOME/.cargo/bin/gtc-dev" --version
 }
 
-# Pinned stable toolchain release; override with GTC_RELEASE. Keep in sync
-# with the default in .github/actions/setup-greentic/action.yml.
-GTC_RELEASE="${GTC_RELEASE:-1.1.2}"
+# Stable toolchain release. Default: UNPINNED — let `gtc install` pull the
+# current default stable toolchain. Pinning to a fixed release (was 1.1.2) went
+# stale: on the 2026-07-30 nightly the pinned `install --release 1.1.2` left no
+# effective toolchain release context ("release context is not installed"),
+# which changed `gtc setup` behavior and turned the redbutton demo red even
+# though the CLI and bundle were unchanged from the green 07-29 run. Set
+# GTC_RELEASE to pin explicitly when you need a specific release.
+GTC_RELEASE="${GTC_RELEASE:-}"
 
 run_gtc_install() {
   local bin="$1"
-  echo "[bootstrap] running '$bin install --force --release ${GTC_RELEASE}'"
-  "$bin" install --force --release "${GTC_RELEASE}"
+  if [[ -n "${GTC_RELEASE}" ]]; then
+    echo "[bootstrap] running '$bin install --force --release ${GTC_RELEASE}'"
+    "$bin" install --force --release "${GTC_RELEASE}"
+  else
+    echo "[bootstrap] running '$bin install --force' (unpinned — current default stable toolchain)"
+    "$bin" install --force
+  fi
 }
 
 # Companion-binary symlinking for the dev channel.
