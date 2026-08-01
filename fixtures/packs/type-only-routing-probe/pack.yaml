@@ -21,8 +21,8 @@ components:
   wasm: components/bug3-test/target/wasm32-wasip1/release/bug3_test.wasm
 dependencies: []
 flows:
-- id: entry_main
-  file: flows/entry_main.ygtc
+- id: main
+  file: flows/main.ygtc
   tags:
   - default
   entrypoints:
