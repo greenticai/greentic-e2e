@@ -5,5 +5,10 @@
       "public_web_enabled": true,
       "public_base_url": "http://127.0.0.1:8080"
     }
+  },
+  "setup_answers": {
+    "redbutton-demo.pack": {
+      "betterstack_token": "playwright-e2e-placeholder"
+    }
   }
 }
