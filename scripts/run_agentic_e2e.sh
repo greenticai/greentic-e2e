@@ -42,9 +42,17 @@ AGENTIC_BUNDLE_SOURCE="${GREENTIC_AGENTIC_BUNDLE_SOURCE:-https://github.com/gree
 E2E_BUNDLE_DIR="${E2E_BUNDLE_DIR:-}"
 
 # Webchat tenant + prompt. The demo's published answers seal the webchat rail
-# under tenant `demo` (setup-answers.json: tenant=demo), so that is the tenant
-# the DirectLine endpoints live under — not the bundle/pack name.
-AGENT_TENANT="${GREENTIC_AGENT_TENANT:-demo}"
+# under whatever tenant they name (setup-answers.json: "tenant"), and that is
+# the tenant the DirectLine endpoints live under — not the bundle/pack name.
+#
+# Read it from the answers rather than assuming: this was pinned to `demo`, the
+# demo later republished with tenant `default`, and the rail moved with it. The
+# bundle still deployed fine, so the only symptom was the token request 404ing
+# with `no bundle is bound to this tenant and path` at the very last step.
+# Resolved after the answers are fetched (see below); an explicit
+# GREENTIC_AGENT_TENANT / --tenant still wins.
+AGENT_TENANT="${GREENTIC_AGENT_TENANT:-}"
+AGENT_TENANT_PINNED="${GREENTIC_AGENT_TENANT:+1}"
 AGENT_FLOW_ID="${GREENTIC_AGENT_FLOW_ID:-}"
 AGENT_PROMPT="${GREENTIC_AGENT_PROMPT:-In one short sentence, what is the capital of Japan?}"
 # A substring the reply must contain, so the assertion tests the ANSWER and not
@@ -83,7 +91,7 @@ while [[ $# -gt 0 ]]; do
     --bundle)         E2E_BUNDLE_DIR="$2"; shift 2 ;;
     --bundle-source)  AGENTIC_BUNDLE_SOURCE="$2"; shift 2 ;;
     --prompt)         AGENT_PROMPT="$2"; shift 2 ;;
-    --tenant)         AGENT_TENANT="$2"; shift 2 ;;
+    --tenant)         AGENT_TENANT="$2"; AGENT_TENANT_PINNED=1; shift 2 ;;
     --flow-id)        AGENT_FLOW_ID="$2"; shift 2 ;;
     --answers)        SETUP_ANSWERS="$2"; shift 2 ;;
     --keep-running)   KEEP_RUNNING="true"; shift ;;
@@ -293,10 +301,24 @@ if isinstance(answers, dict):
 PY
   fi
   [[ -f "${SETUP_ANSWERS}" ]] || die "setup answers not found: ${SETUP_ANSWERS}"
+  # The answers decide which tenant the webchat rail is sealed under, so take
+  # the DirectLine tenant from them unless the caller pinned one.
+  if [[ -z "${AGENT_TENANT_PINNED}" ]]; then
+    answers_tenant="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("tenant") or "")' \
+      "${SETUP_ANSWERS}" 2>/dev/null || true)"
+    if [[ -n "${answers_tenant}" ]]; then
+      AGENT_TENANT="${answers_tenant}"
+      log_verbose "webchat tenant from setup answers: ${AGENT_TENANT}"
+    fi
+  fi
   run_with_timeout "$GTC_CMD_TIMEOUT" \
     gtc setup --non-interactive --answers "${SETUP_ANSWERS}" "${E2E_BUNDLE_DIR}" \
     || die "gtc setup failed"
 fi
+# Fall back only if nothing named a tenant: pinned, answers, then the historical
+# default. Empty would silently build a `/v1/messaging/webchat//...` URL.
+AGENT_TENANT="${AGENT_TENANT:-demo}"
+log "Using webchat tenant '${AGENT_TENANT}'"
 
 # --- Step 3: Start ---------------------------------------------------------
 log "Step 3: gtc start (port ${GATEWAY_PORT})"
