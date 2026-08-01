@@ -209,11 +209,43 @@ else
     # reads GREENTIC_LLM_API_KEY / TAVILY_API_KEY from the environment, which we
     # export into `gtc start` below.
     python3 - "${SETUP_ANSWERS}" "${E2E_BUNDLE_DIR}" <<'PY'
-import json, pathlib, sys, zipfile
+import json, pathlib, re, sys, zipfile
 
 answers_path, bundle_dir = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 doc = json.loads(answers_path.read_text())
 answers = doc.get("setup_answers")
+
+def question_names(pack: pathlib.Path) -> set:
+    """Answer names the pack's own setup.yaml declares."""
+    try:
+        with zipfile.ZipFile(pack) as z:
+            return set(re.findall(r"^- name:\s*(\S+)", z.read("assets/setup.yaml").decode(), re.M))
+    except Exception:
+        return set()
+
+def leaf_renames(pack: pathlib.Path) -> dict:
+    """Map the answers' `a_b` spelling of a secret requirement onto setup.yaml's `b`.
+
+    greentic-demo publishes bundles whose packs disagree with its own published
+    answers file: a requirement key `llm/deepseek` becomes question `deepseek`
+    in the generated assets/setup.yaml (leaf segment only) but is written
+    `llm_deepseek` in <demo>-setup-answers.json (separator swapped). gtc
+    validates against setup.yaml, so the answer is invisible and setup dies with
+    `missing required setup answer for <pack>.deepseek`.
+
+    Derive the mapping from assets/secret-requirements.json rather than
+    hardcoding the pair, so it keeps holding as the demo's requirements change.
+    """
+    try:
+        with zipfile.ZipFile(pack) as z:
+            reqs = json.loads(z.read("assets/secret-requirements.json"))
+    except Exception:
+        return {}
+    return {
+        r["key"].replace("/", "_"): r["key"].split("/")[-1]
+        for r in reqs
+        if isinstance(r, dict) and "/" in r.get("key", "")
+    }
 
 def accepts_answers(pack: pathlib.Path) -> bool:
     """True if the pack ships metadata letting gtc classify answers as secrets."""
@@ -232,6 +264,21 @@ def accepts_answers(pack: pathlib.Path) -> bool:
 
 if isinstance(answers, dict):
     packs = {p.stem: p for p in bundle_dir.rglob("*.gtpack")}
+    # Realign answer names onto what each pack actually asks for, BEFORE the
+    # drop pass below — a renamed answer is a kept answer.
+    for pack_id, section in answers.items():
+        pack = packs.get(pack_id)
+        if pack is None or not isinstance(section, dict):
+            continue
+        declared, rename = question_names(pack), leaf_renames(pack)
+        renamed = []
+        for old, new in rename.items():
+            # Only when the pack really wants `new` and really rejects `old`.
+            if old in section and new in declared and old not in declared:
+                section[new] = section.pop(old)
+                renamed.append(f"{old}->{new}")
+        if renamed:
+            print(f"[agentic-e2e] realigned {pack_id} answer names: {', '.join(sorted(renamed))}")
     missing = [k for k in answers if k not in packs]
     no_meta = [k for k in answers if k in packs and not accepts_answers(packs[k])]
     for k in missing + no_meta:
