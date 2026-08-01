@@ -21,7 +21,14 @@ inputs:
     description: >-
       Pinned Greentic toolchain release passed to `gtc install --release`.
       Bump here to roll every workflow forward at once.
-    default: '1.1.2'
+
+      Keep this at or above the newest fix any suite asserts. It sat at 1.1.2
+      (2026-07-07) while regression-guards-e2e.yml guarded three fixes that all
+      landed 2026-07-23 — greentic-setup #232, greentic-start #438,
+      greentic-runner #611 — so those guards tested pre-fix binaries and failed
+      on every scheduled run since they were added. A stale pin here does not
+      announce itself: the suites that do not assert new behaviour stay green.
+    default: '1.1.13'
   install-gtc:
     description: Install the gtc CLI via cargo-binstall
     default: 'true'

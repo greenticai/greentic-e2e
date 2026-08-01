@@ -112,7 +112,13 @@ jobs:
             name="$(basename "$d")"
             cp -r "$d" "./diagnostics/${name}/" 2>/dev/null || true
           done
-          find ./diagnostics -type f | head
+          # `find ... | head` is a pipefail trap: head closes the pipe after 10
+          # lines, find dies on SIGPIPE, and the pipeline's non-zero status
+          # fails this step (it did on every guard whose tree exceeded 10
+          # files). This listing is informational only — never let it decide
+          # the step's exit status.
+          find ./diagnostics -type f > "${RUNNER_TEMP}/diagnostics.list" || true
+          head -n 40 "${RUNNER_TEMP}/diagnostics.list" || true
 
       - name: Upload diagnostics on failure
         if: failure()

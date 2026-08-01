@@ -14,8 +14,17 @@
 # Why our suite missed it: every fixture bundle shipped a SINGLE flow, so the
 # ambiguity branch was never entered. This probe pack
 # (`fixtures/packs/type-only-routing-probe`) ships two `messaging`-type flows:
-#   * entry_main       — the entrypoint (untagged → entry)
+#   * main             — the entrypoint (untagged → entry)
 #   * internal_helper  — tagged `internal` → must never win a type-only route
+#
+# The entry flow is named `main` on purpose. greentic-start runs its own
+# startup gate (`messaging_app::select_app_flow`) before any ingress is served,
+# and that gate resolves an app flow only by id `default`, id `main`+messaging,
+# or exactly-one-messaging — it is blind to the `internal` tag the runner uses.
+# With an arbitrary entry name it aborts the boot with APP_FLOW_NOT_RESOLVED and
+# the guard can never reach its subject. The gate only validates (it does not
+# pin the flow for ingress), so the runner still resolves this request among two
+# messaging flows and #611's entry-flow fallback is exactly what is under test.
 # It then drives a type-only WebChat DirectLine ingress and asserts a bot reply
 # comes back AND the runtime never logged the ambiguity bail.
 #

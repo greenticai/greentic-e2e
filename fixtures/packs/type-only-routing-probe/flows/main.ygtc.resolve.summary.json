@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "flow": "entry_main.ygtc",
+  "flow": "main.ygtc",
   "nodes": {
     "com_example_bug3-test": {
       "component_id": "com.example.bug3-test",

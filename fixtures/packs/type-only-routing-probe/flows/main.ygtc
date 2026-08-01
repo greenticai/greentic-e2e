@@ -1,0 +1,21 @@
+id: main
+title: Type-only routing entry
+description: >-
+  Entry flow that must win a type-only messaging ingress. Named `main` so
+  greentic-start's startup gate (`select_app_flow`) can pick an app flow at
+  all — that gate only knows `default`/`main`/exactly-one-messaging and is
+  blind to the `internal` tag, so an `entry_main` name aborts the boot before
+  the runner's type-only resolver is ever reached. The routing assertion is
+  unaffected: the gate only validates, and ingress still faces two messaging
+  flows.
+type: messaging
+start: com_example_bug3-test
+parameters: {}
+tags: []
+schema_version: 2
+entrypoints: {}
+nodes:
+  com_example_bug3-test:
+    routing: out
+    probe:
+      text: '{{in.input.text}}'

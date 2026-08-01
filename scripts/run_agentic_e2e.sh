@@ -42,9 +42,17 @@ AGENTIC_BUNDLE_SOURCE="${GREENTIC_AGENTIC_BUNDLE_SOURCE:-https://github.com/gree
 E2E_BUNDLE_DIR="${E2E_BUNDLE_DIR:-}"
 
 # Webchat tenant + prompt. The demo's published answers seal the webchat rail
-# under tenant `demo` (setup-answers.json: tenant=demo), so that is the tenant
-# the DirectLine endpoints live under — not the bundle/pack name.
-AGENT_TENANT="${GREENTIC_AGENT_TENANT:-demo}"
+# under whatever tenant they name (setup-answers.json: "tenant"), and that is
+# the tenant the DirectLine endpoints live under — not the bundle/pack name.
+#
+# Read it from the answers rather than assuming: this was pinned to `demo`, the
+# demo later republished with tenant `default`, and the rail moved with it. The
+# bundle still deployed fine, so the only symptom was the token request 404ing
+# with `no bundle is bound to this tenant and path` at the very last step.
+# Resolved after the answers are fetched (see below); an explicit
+# GREENTIC_AGENT_TENANT / --tenant still wins.
+AGENT_TENANT="${GREENTIC_AGENT_TENANT:-}"
+AGENT_TENANT_PINNED="${GREENTIC_AGENT_TENANT:+1}"
 AGENT_FLOW_ID="${GREENTIC_AGENT_FLOW_ID:-}"
 AGENT_PROMPT="${GREENTIC_AGENT_PROMPT:-In one short sentence, what is the capital of Japan?}"
 # A substring the reply must contain, so the assertion tests the ANSWER and not
@@ -83,7 +91,7 @@ while [[ $# -gt 0 ]]; do
     --bundle)         E2E_BUNDLE_DIR="$2"; shift 2 ;;
     --bundle-source)  AGENTIC_BUNDLE_SOURCE="$2"; shift 2 ;;
     --prompt)         AGENT_PROMPT="$2"; shift 2 ;;
-    --tenant)         AGENT_TENANT="$2"; shift 2 ;;
+    --tenant)         AGENT_TENANT="$2"; AGENT_TENANT_PINNED=1; shift 2 ;;
     --flow-id)        AGENT_FLOW_ID="$2"; shift 2 ;;
     --answers)        SETUP_ANSWERS="$2"; shift 2 ;;
     --keep-running)   KEEP_RUNNING="true"; shift ;;
@@ -209,11 +217,43 @@ else
     # reads GREENTIC_LLM_API_KEY / TAVILY_API_KEY from the environment, which we
     # export into `gtc start` below.
     python3 - "${SETUP_ANSWERS}" "${E2E_BUNDLE_DIR}" <<'PY'
-import json, pathlib, sys, zipfile
+import json, pathlib, re, sys, zipfile
 
 answers_path, bundle_dir = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 doc = json.loads(answers_path.read_text())
 answers = doc.get("setup_answers")
+
+def question_names(pack: pathlib.Path) -> set:
+    """Answer names the pack's own setup.yaml declares."""
+    try:
+        with zipfile.ZipFile(pack) as z:
+            return set(re.findall(r"^- name:\s*(\S+)", z.read("assets/setup.yaml").decode(), re.M))
+    except Exception:
+        return set()
+
+def leaf_renames(pack: pathlib.Path) -> dict:
+    """Map the answers' `a_b` spelling of a secret requirement onto setup.yaml's `b`.
+
+    greentic-demo publishes bundles whose packs disagree with its own published
+    answers file: a requirement key `llm/deepseek` becomes question `deepseek`
+    in the generated assets/setup.yaml (leaf segment only) but is written
+    `llm_deepseek` in <demo>-setup-answers.json (separator swapped). gtc
+    validates against setup.yaml, so the answer is invisible and setup dies with
+    `missing required setup answer for <pack>.deepseek`.
+
+    Derive the mapping from assets/secret-requirements.json rather than
+    hardcoding the pair, so it keeps holding as the demo's requirements change.
+    """
+    try:
+        with zipfile.ZipFile(pack) as z:
+            reqs = json.loads(z.read("assets/secret-requirements.json"))
+    except Exception:
+        return {}
+    return {
+        r["key"].replace("/", "_"): r["key"].split("/")[-1]
+        for r in reqs
+        if isinstance(r, dict) and "/" in r.get("key", "")
+    }
 
 def accepts_answers(pack: pathlib.Path) -> bool:
     """True if the pack ships metadata letting gtc classify answers as secrets."""
@@ -232,6 +272,21 @@ def accepts_answers(pack: pathlib.Path) -> bool:
 
 if isinstance(answers, dict):
     packs = {p.stem: p for p in bundle_dir.rglob("*.gtpack")}
+    # Realign answer names onto what each pack actually asks for, BEFORE the
+    # drop pass below — a renamed answer is a kept answer.
+    for pack_id, section in answers.items():
+        pack = packs.get(pack_id)
+        if pack is None or not isinstance(section, dict):
+            continue
+        declared, rename = question_names(pack), leaf_renames(pack)
+        renamed = []
+        for old, new in rename.items():
+            # Only when the pack really wants `new` and really rejects `old`.
+            if old in section and new in declared and old not in declared:
+                section[new] = section.pop(old)
+                renamed.append(f"{old}->{new}")
+        if renamed:
+            print(f"[agentic-e2e] realigned {pack_id} answer names: {', '.join(sorted(renamed))}")
     missing = [k for k in answers if k not in packs]
     no_meta = [k for k in answers if k in packs and not accepts_answers(packs[k])]
     for k in missing + no_meta:
@@ -246,10 +301,24 @@ if isinstance(answers, dict):
 PY
   fi
   [[ -f "${SETUP_ANSWERS}" ]] || die "setup answers not found: ${SETUP_ANSWERS}"
+  # The answers decide which tenant the webchat rail is sealed under, so take
+  # the DirectLine tenant from them unless the caller pinned one.
+  if [[ -z "${AGENT_TENANT_PINNED}" ]]; then
+    answers_tenant="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("tenant") or "")' \
+      "${SETUP_ANSWERS}" 2>/dev/null || true)"
+    if [[ -n "${answers_tenant}" ]]; then
+      AGENT_TENANT="${answers_tenant}"
+      log_verbose "webchat tenant from setup answers: ${AGENT_TENANT}"
+    fi
+  fi
   run_with_timeout "$GTC_CMD_TIMEOUT" \
     gtc setup --non-interactive --answers "${SETUP_ANSWERS}" "${E2E_BUNDLE_DIR}" \
     || die "gtc setup failed"
 fi
+# Fall back only if nothing named a tenant: pinned, answers, then the historical
+# default. Empty would silently build a `/v1/messaging/webchat//...` URL.
+AGENT_TENANT="${AGENT_TENANT:-demo}"
+log "Using webchat tenant '${AGENT_TENANT}'"
 
 # --- Step 3: Start ---------------------------------------------------------
 log "Step 3: gtc start (port ${GATEWAY_PORT})"
