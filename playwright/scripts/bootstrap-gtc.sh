@@ -43,14 +43,33 @@ install_dev() {
   "$HOME/.cargo/bin/gtc-dev" --version
 }
 
-# Stable toolchain release. Default: UNPINNED — let `gtc install` pull the
-# current default stable toolchain. Pinning to a fixed release (was 1.1.2) went
-# stale: on the 2026-07-30 nightly the pinned `install --release 1.1.2` left no
-# effective toolchain release context ("release context is not installed"),
-# which changed `gtc setup` behavior and turned the redbutton demo red even
-# though the CLI and bundle were unchanged from the green 07-29 run. Set
-# GTC_RELEASE to pin explicitly when you need a specific release.
-GTC_RELEASE="${GTC_RELEASE:-}"
+# Stable toolchain release. Pinned to the newest release the demos actually
+# pass on. TEMPORARY — remove once greenticai/greentic#289 is fixed.
+#
+# Measured, one release per run, everything else held constant:
+#
+#   1.1.2   12 passed, 0 failed   <- newest good
+#   1.1.7    4 passed, 9 failed
+#   1.1.10   4 passed, 9 failed
+#   1.1.13   9 passed, 3 failed   (what `unpinned` resolves to today)
+#
+# It is not monotonic — 1.1.7/1.1.10 break more than 1.1.13 — so this is not one
+# regression that landed and stuck. The window cannot be narrowed further:
+# 1.1.3/1.1.4/1.1.6/1.1.11/1.1.12 are GitHub release tags with NO toolchain
+# manifest in GHCR, so `gtc install --release` 404s on them.
+#
+# A previous attempt unpinned this, reading the `release context is not
+# installed` warning as the cause. That warning is present in the runs where the
+# demos PASS, so it does not correlate; unpinning only advanced the toolchain
+# 1.1.2 -> 1.1.13 and moved pet-daycare from green to red.
+#
+# Pinning here rather than leaving the suite red is deliberate: it was red for
+# five straight runs, and a second regression (pet-daycare) landed inside that
+# red and went unnoticed. A permanently-red suite cannot report anything new.
+# The regression itself is not lost — it is captured in #289 with a repro.
+#
+# Set GTC_RELEASE (or the workflow's `gtc_release` input) to override.
+GTC_RELEASE="${GTC_RELEASE:-1.1.2}"
 
 run_gtc_install() {
   local bin="$1"
