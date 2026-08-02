@@ -13,6 +13,9 @@ on:
       demo_filter:
         description: 'comma-separated demo names, or "all"'
         default: 'all'
+      gtc_release:
+        description: 'pin the stable toolchain release (blank = unpinned)'
+        default: ''
 
 permissions:
   contents: read
@@ -96,6 +99,12 @@ jobs:
         shell: bash
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          # bootstrap-gtc.sh honours GTC_RELEASE to pin the stable toolchain,
+          # but nothing could reach that knob from CI — so the escape hatch it
+          # documents was unusable exactly when a release-context problem needed
+          # bisecting. Blank (schedule runs, and the dispatch default) keeps the
+          # current unpinned behaviour.
+          GTC_RELEASE: ${{ inputs.gtc_release }}
         run: bash playwright/scripts/bootstrap-gtc.sh "${GTC_CHANNEL}"
 
       - uses: actions/setup-node@v4
