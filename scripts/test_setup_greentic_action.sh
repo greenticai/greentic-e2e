@@ -202,7 +202,33 @@ t_rust_step_does_not_pipe_into_shell() {
   fi
 }
 
+# The Windows arm compiles cargo-binstall from source, so the pin must clear the
+# MSRV of that crate's whole dependency tree. It did not, from 2026-08-23, and
+# both Windows jobs died nightly in `cargo install` with "rustc 1.95.0 is not
+# supported by the following packages: vergen@10.0.2 requires rustc 1.96.0".
+#
+# A floor, not an equality: bumping the pin forward must stay free. MIN_RUST is
+# the highest MSRV observed in that tree — raise it when a build fails on one,
+# and raise the pin with it.
+t_rust_pin_clears_known_msrv() {
+  local MIN_RUST="1.96.0"
+  local pin
+  pin="$(ACTION="$ACTION" python3 -c "
+import os, yaml
+print(yaml.safe_load(open(os.environ['ACTION']))['inputs']['rust-version']['default'])
+")" || no "could not read the rust-version default"
+  # Compare as version tuples; a lexical compare calls 1.100 older than 1.96.
+  python3 - "$pin" "$MIN_RUST" <<'PYCMP'
+import sys
+def parse(v): return tuple(int(x) for x in v.split("."))
+sys.exit(0 if parse(sys.argv[1]) >= parse(sys.argv[2]) else 1)
+PYCMP
+  # shellcheck disable=SC2181
+  [[ $? -eq 0 ]] || no "rust-version pin ${pin} is below the known MSRV floor ${MIN_RUST}"
+}
+
 echo "setup-greentic action"
+run_test "rust pin clears the known dependency MSRV floor" t_rust_pin_clears_known_msrv
 run_test "every helper-using step sources lib/net.sh" t_every_helper_step_sources_lib
 run_test "cargo-binstall step survives transient resets" t_binstall_step_survives_resets
 run_test "cargo-binstall step still fails on a total outage" t_binstall_step_fails_on_total_outage

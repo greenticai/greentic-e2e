@@ -9,6 +9,8 @@ End-to-end tests for the Greentic CLI (`gtc`). This repo contains **no Rust code
 Twelve workflows run nightly, on push/PR, or on demand via GitHub Actions:
 
 1. **Nightly Install/Wizard** (`nightly-e2e.yml`, 00:00 UTC) - Tests `gtc install`, `gtc doctor`, and `gtc wizard` across 6 platform/arch combos (Linux x64/arm64, macOS arm64/x64, Windows x64/arm64). Uses `expect` scripts for interactive wizard testing.
+
+   **`Run gtc tenant install` soft-skips a fixed list of upstream release-artifact breakages** — things this repo cannot fix, where a red nightly reports someone else's pipeline. Each entry names one exact signature and is removed when that artifact is fixed; the step still emits a `::warning::` naming which one matched, so a muted breakage stays visible in the run summary. Muting is not solving: the greentic-component entry covers a bug that breaks real Windows users of `gtc install --tenant`, not just CI (its `*-pc-windows-msvc.zip` assets are POSIX tar archives — `file` says so, and the `ustar` magic sits at offset 257). The classifier is tested (`scripts/test_nightly_tenant_softskip.sh`), including that it does NOT skip an unrelated failure: the greentic-component entry requires **two** signatures, because the extract failure alone is something cargo-binstall recovers from routinely and matching it by itself would mute any later failure in the same run.
 2. **Provider E2E** (`provider-e2e.yml`, 00:30 UTC) - Full provider lifecycle: bundle creation, setup, start, HTTP ingress verification, and shutdown. Tests all messaging and event providers.
 3. **Cloud Demo E2E** (`cloud-demo-e2e.yml`, 02:00 UTC) - Cloud demo lifecycle: `gtc wizard`, `gtc setup --non-interactive`, `gtc start --target <aws|azure|gcp>`, web UI verification, optional admin tunnel verification, and `gtc stop --destroy`.
 4. **Store Dual-Publish E2E** (`store-dual-publish-e2e.yml`, 01:30 UTC) - Store agentic-worker lifecycle `publish -> install -> run` against real Postgres + MinIO + the store container. Designer side is simulated via curl; verifies the publish/list/detail/artifact/run API contracts, the install-back byte-equality invariant, and the run-from-store admin hand-off. SKIPS (not fails) when the GHCR store image is not pullable.
@@ -84,11 +86,28 @@ This is a shared single point of failure, and it does not fail in a way that nam
 
 Fetching to a file rather than `| bash` is the other half, and it guards a worse failure than the one observed: a reset *mid-transfer* hands the shell a truncated installer, which runs, half-installs, and fails later somewhere with no connection to the network blip. A pipe cannot inspect what it is about to execute.
 
+**The Rust pin is load-bearing on Windows only, and must clear its dependency
+MSRV.** This repo ships no Rust code, so `rust-version` exists for exactly one
+job: source-building a CLI when no prebuilt artifact is usable — in practice the
+Windows arm of `Install cargo-binstall`. It sat at 1.95.0 while cargo-binstall
+1.22.0 (2026-08-22) pulled vergen 10.0.2, MSRV 1.96.0, and **both Windows jobs
+failed every night from 2026-08-23**. Linux and macOS take the prebuilt path and
+never invoke rustc, so nothing else in the matrix noticed. `test_setup_greentic_action.sh`
+now holds a floor (`MIN_RUST`); raise it and the pin together when a build hits a
+higher MSRV.
+
+Bumping the pin does not disturb the wasm fixtures:
+`fixtures/packs/*/components/bug3-test/rust-toolchain.toml` pins its own channel
+AND declares its own `targets`, so rustup provisions that toolchain plus
+wasm32-wasip2 on demand — which is why the guard workflows build those
+components with `wasm-target: 'false'`.
+
 Tests (`.github/workflows/shell-tests.yml`, on every PR — the only PR gate in this repo, since the e2e suites are nightly and need a toolchain):
 
 ```bash
-bash scripts/test_setup_greentic_net.sh      # gt_fetch / gt_retry, stubbed curl
-bash scripts/test_setup_greentic_action.sh   # the action's real step bodies
+bash scripts/test_setup_greentic_net.sh          # gt_fetch / gt_retry, stubbed curl
+bash scripts/test_setup_greentic_action.sh       # the action's real step bodies + the MSRV floor
+bash scripts/test_nightly_tenant_softskip.sh     # the tenant-install soft-skip classifier
 ```
 
 The second one extracts each step's `run:` block out of `action.yml` and executes it against a stubbed, reset-injecting `curl`. That is deliberate rather than redundant: a step that forgets to source the lib, or calls `curl` directly, passes the unit tests and still dies on the first reset. Both suites are verified against the pre-fix action — all five wiring tests fail on it, with the original error text.

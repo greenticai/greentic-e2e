@@ -40,6 +40,10 @@ jobs:
         shell: bash
         run: bash scripts/test_setup_greentic_action.sh
 
+      - name: nightly-e2e tenant-install soft-skip classifier
+        shell: bash
+        run: bash scripts/test_nightly_tenant_softskip.sh
+
       - name: shellcheck
         shell: bash
         run: |
@@ -47,4 +51,5 @@ jobs:
           shellcheck -x \
             .github/actions/setup-greentic/lib/net.sh \
             scripts/test_setup_greentic_net.sh \
-            scripts/test_setup_greentic_action.sh
+            scripts/test_setup_greentic_action.sh \
+            scripts/test_nightly_tenant_softskip.sh
