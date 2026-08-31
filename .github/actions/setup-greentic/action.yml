@@ -7,6 +7,11 @@ description: >-
   from shared runner IPs hit 403 rate limits, fall back to multi-minute
   source builds, and have timed out whole matrix jobs.
 
+  Every step here reaches the network, so every step is a single point of
+  failure for a whole matrix job. They all route through lib/net.sh's bounded
+  retries — see that file for why, and scripts/test_setup_greentic_net.sh for
+  the tests.
+
 inputs:
   rust-version:
     description: Rust toolchain version to pin
@@ -47,13 +52,17 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
+        . "${GITHUB_ACTION_PATH}/lib/net.sh"
         if ! command -v rustup >/dev/null 2>&1; then
           if [[ "${RUNNER_OS}" == "Windows" ]]; then
-            curl -fsSL -o rustup-init.exe https://win.rustup.rs/x86_64
+            gt_fetch https://win.rustup.rs/x86_64 rustup-init.exe
             ./rustup-init.exe -y --profile minimal --default-toolchain "${{ inputs.rust-version }}"
           else
-            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
-              | sh -s -- -y --profile minimal --default-toolchain "${{ inputs.rust-version }}"
+            # Fetched to a file rather than piped into `sh`: a reset mid-transfer
+            # would otherwise hand the shell a truncated installer, which runs.
+            gt_fetch https://sh.rustup.rs rustup-init.sh
+            sh rustup-init.sh -y --profile minimal --default-toolchain "${{ inputs.rust-version }}"
+            rm -f rustup-init.sh
           fi
         fi
         export PATH="$HOME/.cargo/bin:$PATH"
@@ -72,17 +81,34 @@ runs:
         GITHUB_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
+        . "${GITHUB_ACTION_PATH}/lib/net.sh"
         export PATH="$HOME/.cargo/bin:$PATH"
         if command -v cargo-binstall >/dev/null 2>&1; then
           cargo binstall -V
           exit 0
         fi
         if [[ "${RUNNER_OS}" == "Windows" ]]; then
-          cargo install cargo-binstall --locked
+          gt_retry "cargo install cargo-binstall" cargo install cargo-binstall --locked
         else
-          curl -L --proto '=https' --tlsv1.2 -sSf \
-            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash
+          # This fetch ran exactly once and took `tenant-binding` down in run
+          # 33363027898 on a single `curl: (35) Recv failure: Connection reset
+          # by peer`, 53ms in. The two sibling matrix jobs pulled the same url
+          # seconds either side and passed — the url was fine, the step just had
+          # no second attempt. Both ends of this chain already retried (the
+          # `gtc install` step below, and the installer's own
+          # `curl --retry 10` for its tarball); only our fetch of the installer
+          # did not.
+          #
+          # Materialised to a file instead of `| bash` so a partial download can
+          # never be executed. See lib/net.sh.
+          installer="${RUNNER_TEMP:-/tmp}/install-from-binstall-release.sh"
+          gt_fetch \
+            https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh \
+            "$installer"
+          bash "$installer"
+          rm -f "$installer"
         fi
+        cargo binstall -V
 
     - name: Install gtc CLI
       if: inputs.install-gtc == 'true'
@@ -92,11 +118,12 @@ runs:
         CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
       run: |
         set -euo pipefail
+        . "${GITHUB_ACTION_PATH}/lib/net.sh"
         export PATH="$HOME/.cargo/bin:$PATH"
         if [[ -z "${{ inputs.gtc-version }}" || "${{ inputs.gtc-version }}" == "latest" ]]; then
-          cargo binstall -y gtc
+          gt_retry "cargo binstall gtc" cargo binstall -y gtc
         else
-          cargo binstall -y "gtc@${{ inputs.gtc-version }}"
+          gt_retry "cargo binstall gtc" cargo binstall -y "gtc@${{ inputs.gtc-version }}"
         fi
         gtc --version
 
@@ -108,6 +135,7 @@ runs:
         CARGO_NET_GIT_FETCH_WITH_CLI: 'true'
       run: |
         set -euo pipefail
+        . "${GITHUB_ACTION_PATH}/lib/net.sh"
         export PATH="$HOME/.cargo/bin:$PATH"
         # `--install-binaries-only` skips `gtc install`'s second phase: an
         # all-or-nothing prefetch of every pack and component in the pinned
@@ -133,15 +161,11 @@ runs:
         # on the binaries phase, not the artifact phase.
         #
         # The retry stays for the binary downloads, which still hit the network.
-        attempt=1
-        max_attempts=3
-        until gtc install --release "${{ inputs.gtc-release }}" --install-binaries-only; do
-          if [[ "$attempt" -ge "$max_attempts" ]]; then
-            echo "gtc install failed after ${max_attempts} attempts" >&2
-            exit 1
-          fi
-          delay=$((attempt * 15))
-          echo "gtc install attempt ${attempt}/${max_attempts} failed; retrying in ${delay}s" >&2
-          sleep "${delay}"
-          attempt=$((attempt + 1))
-        done
+        #
+        # Kept on its own budget rather than lib/net.sh's default: a retry here
+        # redoes the whole binary set, so it is worth waiting longer between
+        # attempts and trying fewer times than for a single script fetch.
+        GT_RETRY_ATTEMPTS=3
+        GT_RETRY_BASE_DELAY=15
+        gt_retry "gtc install" \
+          gtc install --release "${{ inputs.gtc-release }}" --install-binaries-only
