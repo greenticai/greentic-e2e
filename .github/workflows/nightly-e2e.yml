@@ -465,14 +465,37 @@ jobs:
 
           if [ "$status" -ne 0 ]; then
             # Known upstream release breakages that this repo cannot fix.
-            # Each grep matches one exact signature; remove the entry once the
+            # Each entry matches one exact signature; remove it once the
             # corresponding upstream artifact is fixed.
             #  - greentic-designer 'latest' release is missing the
             #    greentic-designer.json asset (all platforms).
             #  - greentic-chat2data publishes no macOS x86_64 target.
-            if grep -q "greentic-designer.json\` not found" "$log" \
-              || grep -q "no target for macos / x86_64" "$log"; then
-              echo "::warning::tenant install soft-skipped — known upstream release artifact issue (see log above). Fix belongs in the greentic release pipelines, not this repo."
+            #  - greentic-component's Windows assets are named `.zip` but are
+            #    POSIX tar archives, so cargo-binstall cannot extract them,
+            #    falls back to a source build, and that build then collides
+            #    with the binary the public-install phase already placed
+            #    ("already exists in destination", no --force). Verified
+            #    2026-08-31 against v1.1.3: `file` reports "POSIX tar archive
+            #    (GNU)" and the `ustar` magic is at offset 257. This breaks
+            #    real Windows users of `gtc install --tenant`, not just CI —
+            #    it is muted here, NOT solved. Fix belongs in
+            #    greenticai/greentic-component's release workflow.
+            skip_reason=""
+            if grep -q "greentic-designer.json\` not found" "$log"; then
+              skip_reason="greentic-designer.json asset missing from the release"
+            elif grep -q "no target for macos / x86_64" "$log"; then
+              skip_reason="greentic-chat2data publishes no macos/x86_64 target"
+            elif grep -q "Failed to extract zipfile" "$log" \
+              && grep -q "already exists in destination" "$log"; then
+              # BOTH signatures are required on purpose. The extract failure
+              # alone is a warning cargo-binstall recovers from routinely (it
+              # just builds from source), so matching it by itself would mute
+              # any later, unrelated failure in the same run.
+              skip_reason="a Windows release asset named .zip is not a zip; binstall's source fallback then hit an existing binary"
+            fi
+
+            if [ -n "$skip_reason" ]; then
+              echo "::warning::tenant install soft-skipped — known upstream release artifact issue: ${skip_reason}. Fix belongs in the greentic release pipelines, not this repo."
               exit 0
             fi
             exit "$status"

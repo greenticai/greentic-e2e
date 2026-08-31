@@ -14,8 +14,28 @@ description: >-
 
 inputs:
   rust-version:
-    description: Rust toolchain version to pin
-    default: '1.95.0'
+    description: >-
+      Rust toolchain version to pin.
+
+      This repo ships no Rust code of its own, so the pin exists for exactly one
+      job: building CLIs from source when no prebuilt artifact is usable. In
+      practice that is Windows, where `Install cargo-binstall` below compiles
+      cargo-binstall rather than downloading it.
+
+      **It must therefore stay at or above the MSRV of cargo-binstall's whole
+      dependency tree**, which the pin has no way of announcing. It sat at
+      1.95.0 while cargo-binstall 1.22.0 (2026-08-22) pulled vergen 10.0.2,
+      whose MSRV is 1.96.0 — so both Windows jobs died in `cargo install` with
+      "rustc 1.95.0 is not supported by the following packages", every night,
+      from 2026-08-23 onward. Nothing else in the matrix noticed: Linux and
+      macOS take the prebuilt path and never invoke rustc at all.
+
+      Bumping is safe for the wasm fixtures. `fixtures/packs/*/components/
+      bug3-test/rust-toolchain.toml` pins its own channel AND declares its own
+      `targets`, so rustup provisions that toolchain plus wasm32-wasip2 on
+      demand, independent of this input — which is also why the guard workflows
+      build those components with `wasm-target: 'false'`.
+    default: '1.98.0'
   wasm-target:
     description: Also install the wasm32-wasip2 target
     default: 'false'
@@ -88,6 +108,13 @@ runs:
           exit 0
         fi
         if [[ "${RUNNER_OS}" == "Windows" ]]; then
+          # Deliberately a SMALLER budget than lib/net.sh's default. This is a
+          # source build, not a fetch: on Windows it has taken 20-100 minutes,
+          # and the failure it is most likely to hit is a deterministic compile
+          # error (an MSRV bump — see rust-version above), which no number of
+          # retries fixes. One retry covers a transient crates.io blip without
+          # risking four full builds against the job timeout.
+          GT_RETRY_ATTEMPTS=2
           gt_retry "cargo install cargo-binstall" cargo install cargo-binstall --locked
         else
           # This fetch ran exactly once and took `tenant-binding` down in run
