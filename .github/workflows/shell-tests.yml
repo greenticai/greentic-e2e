@@ -1,0 +1,50 @@
+name: Shell unit tests
+
+# The e2e suites themselves are nightly, need a toolchain, and take minutes —
+# so nothing in this repo gates a PR. These tests do: they are pure bash with
+# stubbed network tools, run in seconds, and need no secrets.
+#
+# They exist because the shared toolchain bootstrap is a single point of failure
+# for every matrix job in every suite, and a break in it does not look like a
+# break in it — run 33363027898 surfaced as "tenant-binding failed".
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  shell-tests:
+    name: shell tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq shellcheck
+
+      - name: setup-greentic net helpers
+        shell: bash
+        run: bash scripts/test_setup_greentic_net.sh
+
+      - name: setup-greentic action wiring
+        shell: bash
+        run: bash scripts/test_setup_greentic_action.sh
+
+      - name: shellcheck
+        shell: bash
+        run: |
+          set -euo pipefail
+          shellcheck -x \
+            .github/actions/setup-greentic/lib/net.sh \
+            scripts/test_setup_greentic_net.sh \
+            scripts/test_setup_greentic_action.sh

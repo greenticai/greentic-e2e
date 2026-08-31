@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 End-to-end tests for the Greentic CLI (`gtc`). This repo contains **no Rust code** — tests are pure Bash scripts, Python (pty-based wizard drivers), and TypeScript (Playwright). There is no `Cargo.toml` or `rust-toolchain.toml`.
 
-Ten workflows run nightly (or on-demand) via GitHub Actions:
+Twelve workflows run nightly, on push/PR, or on demand via GitHub Actions:
 
 1. **Nightly Install/Wizard** (`nightly-e2e.yml`, 00:00 UTC) - Tests `gtc install`, `gtc doctor`, and `gtc wizard` across 6 platform/arch combos (Linux x64/arm64, macOS arm64/x64, Windows x64/arm64). Uses `expect` scripts for interactive wizard testing.
 2. **Provider E2E** (`provider-e2e.yml`, 00:30 UTC) - Full provider lifecycle: bundle creation, setup, start, HTTP ingress verification, and shutdown. Tests all messaging and event providers.
@@ -17,8 +17,9 @@ Ten workflows run nightly (or on-demand) via GitHub Actions:
 7. **Demo Playwright E2E** (`demo-playwright.yml`, 03:30 UTC) - Browser-driven demo site tests via Playwright. See `playwright/` sub-package.
 8. **Notify Scheduled Failures** (`notify-scheduled-failures.yml`) - Alerts on nightly workflow failures.
 9. **CodeQL** (`codeql.yml`) - GitHub code scanning.
-10. **Agentic Worker E2E** (`agentic-e2e.yml`, 01:15 UTC) - Regression guard for the agentic worker (`dw.agent`): boots the tavily agentic demo bundle, drives one Plan-Act-Observe turn over the WebChat DirectLine rail, and asserts the worker returns a real reply. Needs only an LLM key (the `DEEPSEEK_KEY` secret); no Redis — `dw.agent` falls back to in-memory state when `GREENTIC_AW_REDIS_URL` is unset.
-11. **Regression Guards E2E** (`regression-guards-e2e.yml`, 00:45 UTC) - Track-A guards for the July 2026 binary incident; three independent jobs (`fail-fast: false`), each pinned to a shipped fix the prior suite missed. (a) **type-only-routing** (greentic-runner #611): a probe pack with two same-`messaging`-type flows (`main` untagged, `internal_helper` tagged `internal`) must resolve a type-only ingress to the entry flow, not bail "flow type X is ambiguous; pack_id is required". (b) **tenant-binding** (greentic-setup #232): `gtc setup env-deploy <archive> --tenant acme` must stamp `route_binding.tenant_selector.tenant=acme` (team `default`, path_prefixes `["/"]`, hosts `[]`) into `~/.greentic/environments/local/environment.json`; pre-fix the key was absent. (c) **webchat-reply-parity** (greentic-start #438): starting the ARCHIVE (`gtc start <archive.gtbundle>`) takes the env/revision serve arm — the guard asserts the log shows that arm AND that a rich reply (adaptive-card attachment + channelData + entities) survives instead of collapsing to the text-only placeholder. The legacy `--bundle` dir arm (which `webchat-passthrough-e2e.yml` exercises) never regressed here, so this drives the archive/env arm specifically. No secrets needed beyond the toolchain.
+10. **Shell unit tests** (`shell-tests.yml`, on push/PR) - Bash tests for the shared toolchain bootstrap (`.github/actions/setup-greentic`). Fast, no secrets, no toolchain; the only check that gates a PR here. See "CI toolchain bootstrap" below.
+11. **Agentic Worker E2E** (`agentic-e2e.yml`, 01:15 UTC) - Regression guard for the agentic worker (`dw.agent`): boots the tavily agentic demo bundle, drives one Plan-Act-Observe turn over the WebChat DirectLine rail, and asserts the worker returns a real reply. Needs only an LLM key (the `DEEPSEEK_KEY` secret); no Redis — `dw.agent` falls back to in-memory state when `GREENTIC_AW_REDIS_URL` is unset.
+12. **Regression Guards E2E** (`regression-guards-e2e.yml`, 00:45 UTC) - Track-A guards for the July 2026 binary incident; three independent jobs (`fail-fast: false`), each pinned to a shipped fix the prior suite missed. (a) **type-only-routing** (greentic-runner #611): a probe pack with two same-`messaging`-type flows (`main` untagged, `internal_helper` tagged `internal`) must resolve a type-only ingress to the entry flow, not bail "flow type X is ambiguous; pack_id is required". (b) **tenant-binding** (greentic-setup #232): `gtc setup env-deploy <archive> --tenant acme` must stamp `route_binding.tenant_selector.tenant=acme` (team `default`, path_prefixes `["/"]`, hosts `[]`) into `~/.greentic/environments/local/environment.json`; pre-fix the key was absent. (c) **webchat-reply-parity** (greentic-start #438): starting the ARCHIVE (`gtc start <archive.gtbundle>`) takes the env/revision serve arm — the guard asserts the log shows that arm AND that a rich reply (adaptive-card attachment + channelData + entities) survives instead of collapsing to the text-only placeholder. The legacy `--bundle` dir arm (which `webchat-passthrough-e2e.yml` exercises) never regressed here, so this drives the archive/env arm specifically. No secrets needed beyond the toolchain.
 
 
 ## Running Tests
@@ -76,6 +77,21 @@ Requires `gtc` CLI installed (`cargo binstall gtc`). For providers with secrets,
 ### CI toolchain bootstrap
 
 All workflows share `.github/actions/setup-greentic` (Rust pin, cargo-binstall with authenticated GitHub API lookups, gtc CLI, `gtc install --release <pin> --install-binaries-only`). The pinned Greentic toolchain release lives in that action's `gtc-release` default (and is mirrored in `nightly-e2e.yml`'s `GTC_RELEASE` env and `playwright/scripts/bootstrap-gtc.sh`) — bump those together to roll every workflow forward.
+
+**Every network fetch in that action retries, and none of them pipe a download into a shell.** Both rules live in `.github/actions/setup-greentic/lib/net.sh` (`gt_fetch` / `gt_retry`); a new step that reaches the network belongs behind one of them.
+
+This is a shared single point of failure, and it does not fail in a way that names itself. Run 33363027898 lost `tenant-binding` 53ms into `Install cargo-binstall` on one `curl: (35) Recv failure: Connection reset by peer` — the two sibling matrix jobs pulled the same url seconds either side and passed, so the url was fine; the step simply had no second attempt. It surfaced as "the tenant-binding guard is failing", which is the wrong place to look. Note the asymmetry that let it survive: `gtc install` in that same action already retried, and cargo-binstall's own installer fetches its tarball with `curl --retry 10`. Both ends of the chain retried. Only our fetch of the installer did not.
+
+Fetching to a file rather than `| bash` is the other half, and it guards a worse failure than the one observed: a reset *mid-transfer* hands the shell a truncated installer, which runs, half-installs, and fails later somewhere with no connection to the network blip. A pipe cannot inspect what it is about to execute.
+
+Tests (`.github/workflows/shell-tests.yml`, on every PR — the only PR gate in this repo, since the e2e suites are nightly and need a toolchain):
+
+```bash
+bash scripts/test_setup_greentic_net.sh      # gt_fetch / gt_retry, stubbed curl
+bash scripts/test_setup_greentic_action.sh   # the action's real step bodies
+```
+
+The second one extracts each step's `run:` block out of `action.yml` and executes it against a stubbed, reset-injecting `curl`. That is deliberate rather than redundant: a step that forgets to source the lib, or calls `curl` directly, passes the unit tests and still dies on the first reset. Both suites are verified against the pre-fix action — all five wiring tests fail on it, with the original error text.
 
 **Binaries only, deliberately.** The unflagged `gtc install` also prefetches every pack and component in the pinned release — 92 ghcr.io blob pulls for 1.1.2 — in one all-or-nothing loop whose skip-list (the release index) is only written after the loop fully succeeds. A single transient blob error therefore fails the job, and the action's retry redoes all 92 pulls. No workflow reads that prefetch: fixtures name their packs by explicit `oci://ghcr.io/...:latest` reference and cache them workspace-local, while the release index only maps the `:stable` channel tag. `nightly-e2e.yml` is where the full `gtc install` is exercised — it passes `install-toolchain: false` here and runs the unflagged install itself.
 
