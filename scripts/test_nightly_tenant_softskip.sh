@@ -53,8 +53,13 @@ PY
 # --- captured signatures ----------------------------------------------------
 # Real excerpts. Trimmed, but the matched substrings are verbatim.
 
-# greentic-component v1.1.3: the Windows asset named .zip is a POSIX tar, so
-# binstall cannot extract it, builds from source, and collides. Run 32434112475.
+# greentic-component v1.1.3: the Windows asset named .zip was a POSIX tar, so
+# binstall could not extract it, built from source, and collided.
+# Run 32434112475. FIXED upstream in greentic-component 1.1.5, and the
+# soft-skip entry was removed with it — so this signature must now FAIL the
+# job. Kept as a fixture precisely so a silent recurrence is caught: if these
+# release assets ever regress to tar-named-zip, the nightly goes red again
+# instead of quietly passing on a mute nobody remembers.
 LOG_WINDOWS_ZIP_IS_TAR='  WARN resolve: Error while downloading and extracting from fetcher github.com: Failed to extract zipfile: format: end of central directory record not found
   WARN The package greentic-component v1.1.3 will be installed from source (with cargo)
 error: binary `greentic-component.exe` already exists in destination
@@ -107,9 +112,9 @@ STUB
 
 # --------------------------------------------------------------------------
 
-t_soft_skips_windows_zip_is_tar() {
+t_windows_zip_is_tar_is_no_longer_muted() {
   local rc; rc="$(run_step "$LOG_WINDOWS_ZIP_IS_TAR")"
-  [[ "$rc" == "0" ]] || no "expected soft-skip (exit 0), got exit ${rc}"
+  [[ "$rc" != "0" ]] || no "still soft-skipped; the entry should have gone with the upstream fix"
 }
 
 # The whole point of requiring TWO signatures.
@@ -135,7 +140,7 @@ t_chat2data_still_skips() {
 }
 
 echo "nightly-e2e tenant-install soft-skip"
-run_test "soft-skips the Windows .zip-is-really-a-tar breakage" t_soft_skips_windows_zip_is_tar
+run_test "no longer mutes the Windows .zip-is-really-a-tar breakage" t_windows_zip_is_tar_is_no_longer_muted
 run_test "does NOT skip on the extract warning alone"           t_extract_warning_alone_is_not_a_skip
 run_test "does NOT skip an unrelated failure"                   t_real_failure_still_fails
 run_test "still skips the missing greentic-designer.json"       t_designer_json_still_skips
