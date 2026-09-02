@@ -1,6 +1,6 @@
-name: Notify scheduled failures
+name: Notify scheduled workflows
 
-# Catch-all Slack notifier for scheduled workflow failures. Fires via
+# Catch-all Slack notifier for scheduled workflows. Fires via
 # workflow_run on any workflow completion in this repo; the job-level
 # if: filters to event==schedule and conclusion==failure. This closes
 # the gap where failed nightlies (local reusables, inline sibling jobs,
@@ -13,10 +13,19 @@ name: Notify scheduled failures
 
 on:
   workflow_run:
-    # "*" matches every workflow in the repo — that's the point of the
-    # catch-all. GitHub supports glob patterns in `workflows:` and
-    # without this field actionlint emits a schema warning.
-    workflows: ["*"]
+    # `**`, NOT `*`. In GitHub's filter-pattern syntax `*` does not match the
+    # `/` character, so `["*"]` silently excluded every workflow whose NAME
+    # contains a slash. This repo has exactly one — "Nightly e2e gtc
+    # install/wizard" — and it is the one that then failed 17 nights running
+    # (2026-08-15 .. 2026-09-02) without ever alerting. Regression Guards E2E,
+    # whose name has no slash, alerted normally throughout, which is what made
+    # the gap look like "the nightly is fine" rather than "the nightly is
+    # unmonitored".
+    #
+    # The field exists only to silence an actionlint schema warning; omitting
+    # `workflows:` entirely also matches everything. Keep `**` so the linter
+    # stays quiet AND the catch-all is actually a catch-all.
+    workflows: ["**"]
     types:
       - completed
 
@@ -26,6 +35,7 @@ permissions:
 
 jobs:
   notify:
+    name: Failure
     if: >-
       github.event.workflow_run.event == 'schedule' &&
       github.event.workflow_run.conclusion == 'failure'
@@ -34,4 +44,59 @@ jobs:
       workflow-name: ${{ github.event.workflow_run.name }}
       repo: ${{ github.repository }}
       run-url: ${{ github.event.workflow_run.html_url }}
+    secrets: inherit
+
+  # Recovery only — NOT every green run. This repo runs ~10 scheduled
+  # workflows a day; posting "succeeded" for each would put ten routine
+  # messages a day into the alert channel, and an alert channel people learn
+  # to scroll past is worse than no channel. A suite going green again after
+  # failing is news; a suite that was already green is not.
+  #
+  # The previous conclusion is not in the workflow_run payload, so it is
+  # looked up: the most recent COMPLETED scheduled run of the same workflow
+  # that is not this one.
+  recovery-gate:
+    name: Recovery gate
+    if: >-
+      github.event.workflow_run.event == 'schedule' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    outputs:
+      recovered: ${{ steps.check.outputs.recovered }}
+      previous: ${{ steps.check.outputs.previous }}
+    steps:
+      - name: Did the previous scheduled run fail?
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          THIS_RUN: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          # `|| true` so an API hiccup degrades to "no notification" rather
+          # than a red run on a workflow that only exists to report.
+          previous="$(gh api \
+            "repos/${REPO}/actions/workflows/${WORKFLOW_ID}/runs?event=schedule&status=completed&per_page=10" \
+            --jq "[.workflow_runs[] | select(.id != ${THIS_RUN})] | .[0].conclusion // \"none\"" 2>/dev/null || echo "none")"
+          echo "previous scheduled conclusion: ${previous}"
+          echo "previous=${previous}" >> "$GITHUB_OUTPUT"
+          if [ "${previous}" = "failure" ]; then
+            echo "recovered=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "recovered=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  notify-recovery:
+    name: Recovery
+    needs: recovery-gate
+    if: needs.recovery-gate.outputs.recovered == 'true'
+    uses: greenticai/.github/.github/workflows/notify-success.yml@main
+    with:
+      workflow-name: ${{ github.event.workflow_run.name }}
+      details: >-
+        Recovered — the previous scheduled run failed.
+        ${{ github.repository }} · ${{ github.event.workflow_run.html_url }}
     secrets: inherit
