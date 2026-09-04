@@ -1,5 +1,5 @@
 {
-  "messaging-email": {
+  "messaging-microsoft-email": {
     "enabled": true,
     "from_address": "${EMAIL_FROM_ADDRESS}",
     "graph_tenant_id": "${GRAPH_TENANT_ID}",

@@ -226,7 +226,7 @@ Exception: `events-timer` has no HTTP ingress (schedule-based); verified via log
 | `messaging-teams` | `MS_BOT_APP_ID`, `MS_BOT_APP_PASSWORD` |
 | `messaging-webex` | `WEBEX_BOT_TOKEN` |
 | `messaging-whatsapp` | `WHATSAPP_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID` |
-| `messaging-email` | `MS_GRAPH_CLIENT_ID`, `MS_GRAPH_CLIENT_SECRET`, `GRAPH_TENANT_ID` |
+| `messaging-microsoft-email` | `MS_GRAPH_CLIENT_ID`, `MS_GRAPH_CLIENT_SECRET`, `MS_GRAPH_REFRESH_TOKEN`, `GRAPH_TENANT_ID`, `EMAIL_FROM_ADDRESS` |
 | `messaging-webchat-gui` | `WEBCHAT_JWT_SIGNING_KEY` |
 | `events-dummy` | None |
 | `events-webhook` | None |
