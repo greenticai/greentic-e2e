@@ -42,7 +42,7 @@
     "whatsapp_token": "${WHATSAPP_TOKEN}",
     "whatsapp_verify_token": "${WHATSAPP_VERIFY_TOKEN}"
   },
-  "messaging-email": {
+  "messaging-microsoft-email": {
     "enabled": true,
     "from_address": "${EMAIL_FROM_ADDRESS}",
     "graph_tenant_id": "${GRAPH_TENANT_ID}",

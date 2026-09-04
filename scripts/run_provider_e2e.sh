@@ -30,7 +30,7 @@ FIXTURES_DIR="${ROOT_DIR}/fixtures"
 SECRETS_FILE="${ROOT_DIR}/.secrets-provider"
 
 # All available providers
-ALL_MESSAGING="messaging-dummy messaging-telegram messaging-slack messaging-teams messaging-webex messaging-whatsapp messaging-email messaging-webchat"
+ALL_MESSAGING="messaging-dummy messaging-telegram messaging-slack messaging-teams messaging-webex messaging-whatsapp messaging-microsoft-email messaging-webchat"
 ALL_EVENTS="events-dummy events-webhook events-timer events-email-sendgrid events-sms-twilio"
 
 # Defaults
@@ -153,7 +153,7 @@ get_test_payload() {
     messaging-whatsapp)
       echo '{"object":"whatsapp_business_account","entry":[{"id":"123","changes":[{"value":{"messaging_product":"whatsapp","metadata":{"phone_number_id":"123"},"messages":[{"from":"123456","id":"msg1","timestamp":"1700000000","type":"text","text":{"body":"e2e test"}}]},"field":"messages"}]}]}'
       ;;
-    messaging-email)
+    messaging-microsoft-email)
       echo '{"value":[{"changeType":"created","resource":"me/messages/msg1","resourceData":{"id":"msg1"}}]}'
       ;;
     messaging-webchat)

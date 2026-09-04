@@ -269,7 +269,7 @@ jobs:
           - messaging-teams
           - messaging-webex
           - messaging-whatsapp
-          - messaging-email
+          - messaging-microsoft-email
           - messaging-webchat-gui
 
     steps:
@@ -291,6 +291,9 @@ jobs:
           WHATSAPP_PHONE_NUMBER_ID: ${{ secrets.WHATSAPP_PHONE_NUMBER_ID }}
           MS_GRAPH_CLIENT_ID: ${{ secrets.MS_GRAPH_CLIENT_ID }}
           MS_GRAPH_CLIENT_SECRET: ${{ secrets.MS_GRAPH_CLIENT_SECRET }}
+          MS_GRAPH_REFRESH_TOKEN: ${{ secrets.MS_GRAPH_REFRESH_TOKEN }}
+          GRAPH_TENANT_ID: ${{ secrets.GRAPH_TENANT_ID }}
+          EMAIL_FROM_ADDRESS: ${{ secrets.EMAIL_FROM_ADDRESS }}
           WEBCHAT_JWT_SIGNING_KEY: ${{ secrets.WEBCHAT_JWT_SIGNING_KEY }}
         run: |
           # Report missing credentials as a skip signal instead of a hard
@@ -321,8 +324,14 @@ jobs:
             messaging-whatsapp)
               [[ -n "$WHATSAPP_TOKEN" && -n "$WHATSAPP_PHONE_NUMBER_ID" ]] || { present=false; reason="WHATSAPP_TOKEN / WHATSAPP_PHONE_NUMBER_ID"; }
               ;;
-            messaging-email)
-              [[ -n "$MS_GRAPH_CLIENT_ID" && -n "$MS_GRAPH_CLIENT_SECRET" ]] || { present=false; reason="MS_GRAPH_CLIENT_ID / MS_GRAPH_CLIENT_SECRET"; }
+            messaging-microsoft-email)
+              # Gate on every secret the pack marks required, not a subset:
+              # a half-answered required question is a hard setup failure,
+              # not a skip, so the gate has to cover the whole set.
+              [[ -n "$MS_GRAPH_CLIENT_ID" && -n "$MS_GRAPH_CLIENT_SECRET" \
+                 && -n "$MS_GRAPH_REFRESH_TOKEN" && -n "$GRAPH_TENANT_ID" \
+                 && -n "$EMAIL_FROM_ADDRESS" ]] \
+                || { present=false; reason="MS_GRAPH_CLIENT_ID / MS_GRAPH_CLIENT_SECRET / MS_GRAPH_REFRESH_TOKEN / GRAPH_TENANT_ID / EMAIL_FROM_ADDRESS"; }
               ;;
             messaging-webchat-gui)
               [[ -n "$WEBCHAT_JWT_SIGNING_KEY" ]] || { present=false; reason="WEBCHAT_JWT_SIGNING_KEY"; }
@@ -361,6 +370,7 @@ jobs:
           GRAPH_TENANT_ID: ${{ secrets.GRAPH_TENANT_ID }}
           MS_GRAPH_CLIENT_ID: ${{ secrets.MS_GRAPH_CLIENT_ID }}
           MS_GRAPH_CLIENT_SECRET: ${{ secrets.MS_GRAPH_CLIENT_SECRET }}
+          MS_GRAPH_REFRESH_TOKEN: ${{ secrets.MS_GRAPH_REFRESH_TOKEN }}
           WEBCHAT_JWT_SIGNING_KEY: ${{ secrets.WEBCHAT_JWT_SIGNING_KEY }}
         run: |
           set -euo pipefail
@@ -468,7 +478,7 @@ jobs:
             messaging-whatsapp)
               PAYLOAD='{"object":"whatsapp_business_account","entry":[{"id":"123","changes":[{"value":{"messaging_product":"whatsapp","metadata":{"phone_number_id":"123"},"messages":[{"from":"123456","id":"msg1","timestamp":"1700000000","type":"text","text":{"body":"e2e test"}}]},"field":"messages"}]}]}'
               ;;
-            messaging-email)
+            messaging-microsoft-email)
               PAYLOAD='{"value":[{"changeType":"created","resource":"me/messages/msg1","resourceData":{"id":"msg1"}}]}'
               ;;
             messaging-webchat-gui)
