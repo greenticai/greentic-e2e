@@ -453,15 +453,59 @@ jobs:
           fi
 
           log="${RUNNER_TEMP}/gtc-tenant-install.log"
-          status=0
+
+          # Resolve the credential flag once: it is a local, network-free
+          # --help parse, and the answer cannot change between retries.
           if gtc install --help | grep -q -- '--token'; then
-            gtc install --release "$GTC_RELEASE" --tenant "$GREENTIC_TENANT" --token "$GREENTIC_TENANT_TOKEN" 2>&1 | tee "$log" || status=$?
+            cred_flag="--token"
           elif gtc install --help | grep -q -- '--key'; then
-            gtc install --release "$GTC_RELEASE" --tenant "$GREENTIC_TENANT" --key "$GREENTIC_TENANT_TOKEN" 2>&1 | tee "$log" || status=$?
+            cred_flag="--key"
           else
             echo "gtc install does not support tenant credentials for this version"
             exit 1
           fi
+
+          # Retry a TRUNCATED RESPONSE BODY, and nothing else.
+          #
+          # `gtc install --tenant` fetches a release-metadata JSON per partner
+          # repo (telco-x's is ~190 KB) and does not retry that read itself, so
+          # a connection dropped mid-body surfaces as a parse error at whatever
+          # byte it reached. On 2026-09-05 it took the Linux arm64 leg down on
+          # its own: parse died at column 185662 of a 194132-byte document,
+          # 8.5 KB short of the end, while the other five platforms fetched the
+          # same release in the same run and passed. The release was intact
+          # then and is intact now.
+          #
+          # This deliberately does NOT belong in the soft-skip list below. That
+          # list mutes artifacts that are genuinely broken upstream; this one is
+          # healthy and only the transfer failed. Muting the signature would
+          # also mute real metadata corruption, which reports identically —
+          # and a permanently muted check is how a breakage survives for weeks.
+          #
+          # Only this one class is retried. A missing asset or an absent target
+          # is deterministic: retrying it just spends three times as long
+          # arriving at the same answer.
+          status=0
+          for attempt in 1 2 3; do
+            status=0
+            gtc install --release "$GTC_RELEASE" --tenant "$GREENTIC_TENANT" \
+              "$cred_flag" "$GREENTIC_TENANT_TOKEN" 2>&1 | tee "$log" || status=$?
+
+            if [ "$status" -eq 0 ]; then
+              break
+            fi
+
+            if ! grep -qE 'error decoding response body|EOF while parsing a value' "$log"; then
+              break
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::tenant install hit a truncated response body; retrying (attempt ${attempt}/3)."
+              sleep "$((attempt * 10))"
+            else
+              echo "::warning::tenant install still hit a truncated response body after 3 attempts — reporting the failure rather than muting it."
+            fi
+          done
 
           if [ "$status" -ne 0 ]; then
             # Known upstream release breakages that this repo cannot fix.
