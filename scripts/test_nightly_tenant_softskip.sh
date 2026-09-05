@@ -77,6 +77,16 @@ error: could not compile `greentic-component` due to 3 previous errors'
 LOG_DESIGNER_JSON='ERROR asset `greentic-designer.json` not found in release v1.0.13'
 LOG_CHAT2DATA='ERROR greentic-chat2data: no target for macos / x86_64'
 
+# A truncated HTTP body, not a broken artifact. Run 33938472752, Linux arm64
+# only: the release-metadata JSON is 194132 bytes and the parse died at column
+# 185662, while the other five platforms fetched the same release in the same
+# run and passed. This one IS retried - and must still fail if it persists.
+LOG_TRUNCATED_BODY='Error: failed to parse GitHub release metadata for `https://github.com/greentic-biz/telco-x/releases/download/v1.1.0/assistant_templates__README.md`
+
+Caused by:
+    0: error decoding response body
+    1: EOF while parsing a value at line 1 column 185662'
+
 # A genuine regression that must fail the job.
 LOG_REAL_FAILURE='ERROR Fatal error:
   × tenant 3point is not entitled to greentic-operator
@@ -110,6 +120,49 @@ STUB
   echo "$rc"
 }
 
+# run_step_flaky <fail-first-N> <log-fixture> ; echoes "<step-rc> <gtc-calls>"
+#
+# Counts invocations, because the retry's failure mode is not "too few" but
+# "too many": a predicate widened to cover deterministic failures would still
+# reach the right verdict, just three times slower, and no assertion on the
+# exit code alone would notice.
+#
+# `sleep` is stubbed to a no-op. The backoff is real (10s then 20s) and would
+# add 30s to this suite; the step's timing is not what these tests are about.
+run_step_flaky() {
+  local fail_n="$1" logtext="$2"
+  local sb; sb="$(mktemp -d)"
+  mkdir -p "${sb}/bin" "${sb}/tmp"
+  printf '%s' "$logtext" > "${sb}/fixture.log"
+  echo 0 > "${sb}/calls"
+
+  cat > "${sb}/bin/gtc" <<STUB
+#!/usr/bin/env bash
+# \`gtc install --help\` must advertise --token, and must not be counted.
+for a in "\$@"; do [[ "\$a" == "--help" ]] && { echo "  --token <TOKEN>  tenant token"; exit 0; }; done
+n=\$(( \$(cat "${sb}/calls") + 1 )); echo "\$n" > "${sb}/calls"
+if [[ "\$n" -le ${fail_n} ]]; then cat "${sb}/fixture.log"; exit 1; fi
+echo "tenant install completed on attempt \$n"
+exit 0
+STUB
+  chmod +x "${sb}/bin/gtc"
+
+  printf '#!/usr/bin/env bash\nexit 0\n' > "${sb}/bin/sleep"
+  chmod +x "${sb}/bin/sleep"
+
+  extract_step > "${sb}/step.sh"
+  local rc=0
+  ( PATH="${sb}/bin:/usr/bin:/bin" \
+    RUNNER_TEMP="${sb}/tmp" \
+    GREENTIC_TENANT_TOKEN=stub-token \
+    GREENTIC_TENANT=3point \
+    GTC_RELEASE=1.1.2 \
+    bash "${sb}/step.sh" ) >"${sb}/out" 2>&1 || rc=$?
+  local calls; calls="$(cat "${sb}/calls")"
+  rm -rf "$sb"
+  echo "$rc $calls"
+}
+
 # --------------------------------------------------------------------------
 
 t_windows_zip_is_tar_is_no_longer_muted() {
@@ -139,12 +192,38 @@ t_chat2data_still_skips() {
   [[ "$rc" == "0" ]] || no "expected soft-skip (exit 0), got exit ${rc}"
 }
 
+t_truncated_body_is_retried_then_succeeds() {
+  local r; r="$(run_step_flaky 2 "$LOG_TRUNCATED_BODY")"
+  [[ "$r" == "0 3" ]] || no "expected exit 0 on the third attempt, got '${r}' (rc calls)"
+}
+
+# Retrying is not muting. Three truncated bodies in a row is a real failure.
+t_persistent_truncation_still_fails() {
+  local r; r="$(run_step_flaky 9 "$LOG_TRUNCATED_BODY")"
+  [[ "$r" == "1 3" ]] || no "expected exit 1 after exactly 3 attempts, got '${r}' (rc calls)"
+}
+
+# Guards the retry predicate from being widened.
+t_soft_skip_signature_is_decided_on_the_first_attempt() {
+  local r; r="$(run_step_flaky 9 "$LOG_DESIGNER_JSON")"
+  [[ "$r" == "0 1" ]] || no "expected a soft-skip after ONE attempt, got '${r}' (rc calls)"
+}
+
+t_real_failure_is_not_retried() {
+  local r; r="$(run_step_flaky 9 "$LOG_REAL_FAILURE")"
+  [[ "$r" == "1 1" ]] || no "expected a single attempt, got '${r}' (rc calls)"
+}
+
 echo "nightly-e2e tenant-install soft-skip"
 run_test "no longer mutes the Windows .zip-is-really-a-tar breakage" t_windows_zip_is_tar_is_no_longer_muted
 run_test "does NOT skip on the extract warning alone"           t_extract_warning_alone_is_not_a_skip
 run_test "does NOT skip an unrelated failure"                   t_real_failure_still_fails
 run_test "still skips the missing greentic-designer.json"       t_designer_json_still_skips
 run_test "still skips the absent macos/x86_64 target"           t_chat2data_still_skips
+run_test "retries a truncated response body, then succeeds"     t_truncated_body_is_retried_then_succeeds
+run_test "still FAILS when the truncation persists"             t_persistent_truncation_still_fails
+run_test "decides a soft-skip signature on the first attempt"   t_soft_skip_signature_is_decided_on_the_first_attempt
+run_test "does NOT retry an unrelated failure"                  t_real_failure_is_not_retried
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]
