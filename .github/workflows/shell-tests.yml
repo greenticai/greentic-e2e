@@ -44,6 +44,10 @@ jobs:
         shell: bash
         run: bash scripts/test_nightly_tenant_softskip.sh
 
+      - name: nightly-e2e public-install retry predicate
+        shell: bash
+        run: bash scripts/test_nightly_public_install_retry.sh
+
       - name: shellcheck
         shell: bash
         run: |
@@ -53,3 +57,4 @@ jobs:
             scripts/test_setup_greentic_net.sh \
             scripts/test_setup_greentic_action.sh \
             scripts/test_nightly_tenant_softskip.sh
+            scripts/test_nightly_public_install_retry.sh

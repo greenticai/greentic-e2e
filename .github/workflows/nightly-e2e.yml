@@ -82,10 +82,53 @@ jobs:
         run: |
           set -euo pipefail
 
-          gtc install --release "${GTC_RELEASE}" >"${RUNNER_TEMP}/gtc-public-install.log" 2>&1 || {
-            cat "${RUNNER_TEMP}/gtc-public-install.log"
-            exit 1
-          }
+          log="${RUNNER_TEMP}/gtc-public-install.log"
+
+          # Retry a REFUSED REGISTRY PULL, and nothing else.
+          #
+          # `gtc install --release` prefetches every pack and component in the
+          # pinned release from ghcr.io — ~110 pulls, all-or-nothing, with no
+          # retry of its own. On 2026-09-07 (run 34075162802) the macOS x64 leg
+          # lost the whole step to ONE `401 Not authorized` on the 101st
+          # manifest GET: the package was public, the other five platforms
+          # pulled it in the same run, and the same commit had passed the night
+          # before. A registry hiccup, not a broken release.
+          #
+          # A retry is cheap here: the binaries phase skips everything already
+          # installed (so the ~30-minute macOS x64 source build of
+          # greentic-deployer is not repeated) and the prefetch re-walks a
+          # warm blob cache.
+          #
+          # Only this one class is retried. A missing manifest is
+          # deterministic, and a failed source build is both deterministic AND
+          # expensive — three attempts at it would breach the job timeout on
+          # macOS x64 while arriving at the same answer. Neither is muted:
+          # after three refused pulls the failure is reported as before.
+          status=0
+          for attempt in 1 2 3; do
+            status=0
+            gtc install --release "${GTC_RELEASE}" >"$log" 2>&1 || status=$?
+
+            if [ "$status" -eq 0 ]; then
+              break
+            fi
+
+            if ! grep -qE 'failed to pull .*: Not authorized: url ' "$log"; then
+              break
+            fi
+
+            if [ "$attempt" -lt 3 ]; then
+              echo "::warning::public install hit a refused registry pull (401); retrying (attempt ${attempt}/3)."
+              sleep "$((attempt * 10))"
+            else
+              echo "::warning::public install still hit a refused registry pull after 3 attempts — reporting the failure rather than muting it."
+            fi
+          done
+
+          if [ "$status" -ne 0 ]; then
+            cat "$log"
+            exit "$status"
+          fi
 
       - name: Run gtc doctor
         id: public_doctor
