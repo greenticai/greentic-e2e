@@ -56,5 +56,5 @@ jobs:
             .github/actions/setup-greentic/lib/net.sh \
             scripts/test_setup_greentic_net.sh \
             scripts/test_setup_greentic_action.sh \
-            scripts/test_nightly_tenant_softskip.sh
+            scripts/test_nightly_tenant_softskip.sh \
             scripts/test_nightly_public_install_retry.sh
