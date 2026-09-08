@@ -101,7 +101,11 @@ jobs:
           tpl = tpl.replace("{{BUNDLE_DIR}}", "${E2E_BUNDLE_DIR}")
           pathlib.Path("${ANSWERS}").write_text(tpl)
           PY
-          gtc wizard --answers "${ANSWERS}"
+          # Retry a failed pack resolve, and nothing else — see
+          # scripts/wizard_pack_retry.sh for why one hiccup on ghcr.io
+          # used to take the whole leg down.
+          . scripts/wizard_pack_retry.sh
+          gtc_wizard_with_pack_retry --answers "${ANSWERS}"
 
       - name: Setup providers
         shell: bash
@@ -398,7 +402,11 @@ jobs:
           tpl = tpl.replace("{{BUNDLE_DIR}}", "${BUNDLE_DIR}")
           pathlib.Path("${ANSWERS}").write_text(tpl)
           PY
-          gtc wizard --answers "${ANSWERS}"
+          # Retry a failed pack resolve, and nothing else — see
+          # scripts/wizard_pack_retry.sh for why one hiccup on ghcr.io
+          # used to take the whole leg down.
+          . scripts/wizard_pack_retry.sh
+          gtc_wizard_with_pack_retry --answers "${ANSWERS}"
 
           # Create setup answers from fixture with env substitution
           envsubst < "fixtures/setup-answers/${PROVIDER}.json" > "${ROOT}/setup-answers.json"
@@ -623,7 +631,11 @@ jobs:
           tpl = tpl.replace("{{BUNDLE_DIR}}", "${BUNDLE_DIR}")
           pathlib.Path("${ANSWERS}").write_text(tpl)
           PY
-          gtc wizard --answers "${ANSWERS}"
+          # Retry a failed pack resolve, and nothing else — see
+          # scripts/wizard_pack_retry.sh for why one hiccup on ghcr.io
+          # used to take the whole leg down.
+          . scripts/wizard_pack_retry.sh
+          gtc_wizard_with_pack_retry --answers "${ANSWERS}"
 
           # Create setup answers from fixture with env substitution
           envsubst < "fixtures/setup-answers/${PROVIDER}.json" > "${ROOT}/setup-answers.json"
