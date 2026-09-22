@@ -87,6 +87,22 @@ Caused by:
     0: error decoding response body
     1: EOF while parsing a value at line 1 column 185662'
 
+# A GitHub 5xx on one release-asset download, not a broken artifact. Run
+# 35680119954, Windows x64 only: the asset was intact (state "uploaded", 129 B)
+# and served fine minutes later, and the other five platforms downloaded the
+# same release in the same run and passed. Retried like a truncated body.
+LOG_SERVER_ERROR='Error: download failed for `https://github.com/greentic-biz/telco-x/releases/download/v1.1.0/views__tx.view.timeline_card__README.md`
+
+Caused by:
+    HTTP status server error (500 Internal Server Error) for url (https://api.github.com/repos/greentic-biz/telco-x/releases/assets/549999117)'
+
+# The 4xx sibling of the above. A missing asset is deterministic, so it must
+# NOT be retried: three attempts would reach the same 404 three times slower.
+LOG_CLIENT_ERROR='Error: download failed for `https://github.com/greentic-biz/telco-x/releases/download/v1.1.0/views__tx.view.timeline_card__README.md`
+
+Caused by:
+    HTTP status client error (404 Not Found) for url (https://api.github.com/repos/greentic-biz/telco-x/releases/assets/549999117)'
+
 # A genuine regression that must fail the job.
 LOG_REAL_FAILURE='ERROR Fatal error:
   × tenant 3point is not entitled to greentic-operator
@@ -209,6 +225,23 @@ t_soft_skip_signature_is_decided_on_the_first_attempt() {
   [[ "$r" == "0 1" ]] || no "expected a soft-skip after ONE attempt, got '${r}' (rc calls)"
 }
 
+t_server_error_is_retried_then_succeeds() {
+  local r; r="$(run_step_flaky 1 "$LOG_SERVER_ERROR")"
+  [[ "$r" == "0 2" ]] || no "expected exit 0 on the second attempt, got '${r}' (rc calls)"
+}
+
+# Retrying is not muting. Three 5xx answers in a row is a real failure.
+t_persistent_server_error_still_fails() {
+  local r; r="$(run_step_flaky 9 "$LOG_SERVER_ERROR")"
+  [[ "$r" == "1 3" ]] || no "expected exit 1 after exactly 3 attempts, got '${r}' (rc calls)"
+}
+
+# Guards the 5xx predicate from being widened to every HTTP error.
+t_client_error_is_not_retried() {
+  local r; r="$(run_step_flaky 9 "$LOG_CLIENT_ERROR")"
+  [[ "$r" == "1 1" ]] || no "expected a single attempt, got '${r}' (rc calls)"
+}
+
 t_real_failure_is_not_retried() {
   local r; r="$(run_step_flaky 9 "$LOG_REAL_FAILURE")"
   [[ "$r" == "1 1" ]] || no "expected a single attempt, got '${r}' (rc calls)"
@@ -224,6 +257,9 @@ run_test "retries a truncated response body, then succeeds"     t_truncated_body
 run_test "still FAILS when the truncation persists"             t_persistent_truncation_still_fails
 run_test "decides a soft-skip signature on the first attempt"   t_soft_skip_signature_is_decided_on_the_first_attempt
 run_test "does NOT retry an unrelated failure"                  t_real_failure_is_not_retried
+run_test "retries a GitHub 5xx asset download, then succeeds"  t_server_error_is_retried_then_succeeds
+run_test "still FAILS when the 5xx persists"                   t_persistent_server_error_still_fails
+run_test "does NOT retry a 4xx asset download"                 t_client_error_is_not_retried
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
 [[ "$fail" -eq 0 ]]
