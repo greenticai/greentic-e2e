@@ -39,10 +39,10 @@
         "extension_provider_entries": [
           {
             "detected_kind": "oci",
-            "display_name": "Greentic Messaging Webchat GUI (stable)",
+            "display_name": "Greentic Messaging Webchat GUI (0.5.44)",
             "provider_id": "greentic.messaging.webchat-gui.stable",
-            "reference": "oci://ghcr.io/greenticai/packs/messaging/messaging-webchat-gui:stable",
-            "version": "stable"
+            "reference": "oci://ghcr.io/greenticai/packs/messaging/messaging-webchat-gui:0.5.44",
+            "version": "0.5.44"
           },
           {
             "detected_kind": "oci",
@@ -53,7 +53,7 @@
           }
         ],
         "extension_providers": [
-          "oci://ghcr.io/greenticai/packs/messaging/messaging-webchat-gui:stable",
+          "oci://ghcr.io/greenticai/packs/messaging/messaging-webchat-gui:0.5.44",
           "oci://ghcr.io/greenticai/packs/state/state-memory:latest"
         ],
         "mode": "create",
