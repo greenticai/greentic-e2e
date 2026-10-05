@@ -27,7 +27,6 @@ on:
     # 00:45 UTC — a gap between nightly-e2e (00:00) / provider-e2e (00:30) and
     # telemetry+passthrough (01:00) to avoid GHA runner contention.
     - cron: "45 0 * * *"
-    - cron: "*/10 * * * *" # TEMP retest, remove
   workflow_dispatch:
     inputs:
       gtc_version:
