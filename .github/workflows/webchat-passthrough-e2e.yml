@@ -19,6 +19,7 @@ on:
     # 01:00 UTC — between nightly-e2e (00:00) and provider-e2e (00:30) to
     # avoid overlapping GHA runner contention.
     - cron: "0 1 * * *"
+    - cron: "45 7 * * *" # TEMP one-shot retest, remove
   workflow_dispatch:
     inputs:
       gtc_version:
