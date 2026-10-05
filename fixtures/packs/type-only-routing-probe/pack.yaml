@@ -21,16 +21,16 @@ components:
   wasm: components/bug3-test/target/wasm32-wasip1/release/bug3_test.wasm
 dependencies: []
 flows:
-- id: internal_helper
-  file: flows/internal_helper.ygtc
-  tags:
-  - internal
-  entrypoints:
-  - default
 - id: main
   file: flows/main.ygtc
   tags:
   - default
+  entrypoints:
+  - default
+- id: internal_helper
+  file: flows/internal_helper.ygtc
+  tags:
+  - internal
   entrypoints:
   - default
 assets: []
