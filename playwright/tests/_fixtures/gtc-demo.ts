@@ -102,12 +102,14 @@ async function resolveAnswersAsset(
  * `state-store@1.1.0`, so every webchat demo booted with "component imports
  * instance greentic:state/state-store@1.1.0, but a matching implementation was
  * not found in the linker" and the chat page never rendered a textbox.
- * 0.5.44 is the last build importing 1.0.0 (verified against the pack's wasm).
+ * 0.5.43 is the build the last green nightly (2026-10-04) ran against; 0.5.44
+ * also imports 1.0.0 but fails weather-mcp (card inputs stay disabled), and
+ * 0.5.45+ import 1.1.0 (all verified against the packs' wasm).
  * Upstream demo create-answers reference `:stable`, so pin it here. Drop this
  * once the runtime under test ships state-store 1.1.0
  * (same condition as the fixtures pinned in #115).
  */
-const WEBCHAT_GUI_PIN = "0.5.44";
+const WEBCHAT_GUI_PIN = "0.5.43";
 
 async function pinWebchatGui(
   answersPath: string,
