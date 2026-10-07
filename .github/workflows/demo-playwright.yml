@@ -1,8 +1,6 @@
 name: Nightly demo Playwright e2e
 
 on:
-  pull_request: # TEMP retest, remove
-    paths: ['playwright/tests/_fixtures/gtc-demo.ts']
   schedule:
     - cron: '30 3 * * *'   # 03:30 UTC, after nightly-e2e (00:00) & cloud-demo (02:00)
   workflow_dispatch:
