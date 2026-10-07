@@ -95,6 +95,39 @@ async function resolveAnswersAsset(
   );
 }
 
+/**
+ * The stable runtime (gtc 1.1.x -> greentic-start 1.1.26) provides
+ * `greentic:state/state-store@1.0.0` only. The `messaging-webchat-gui` tag
+ * `stable` moved on 2026-10-05 to a build whose provider component imports
+ * `state-store@1.1.0`, so every webchat demo booted with "component imports
+ * instance greentic:state/state-store@1.1.0, but a matching implementation was
+ * not found in the linker" and the chat page never rendered a textbox.
+ * 0.5.44 is the last build importing 1.0.0 (verified against the pack's wasm).
+ * Upstream demo create-answers reference `:stable`, so pin it here. Drop this
+ * once the runtime under test ships state-store 1.1.0
+ * (same condition as the fixtures pinned in #115).
+ */
+const WEBCHAT_GUI_PIN = "0.5.44";
+
+async function pinWebchatGui(
+  answersPath: string,
+  workerIndex: number,
+): Promise<string> {
+  const text = await readFile(answersPath, "utf8");
+  const pinned = text.replace(
+    /(messaging-webchat-gui):(?:stable|latest)\b/g,
+    `$1:${WEBCHAT_GUI_PIN}`,
+  );
+  if (pinned === text) return answersPath;
+  // Per-worker copy: the downloaded asset is shared by all workers.
+  const out = join(
+    dirname(answersPath),
+    `pinned-w${workerIndex}.json`,
+  );
+  await writeFile(out, pinned);
+  return out;
+}
+
 function maskSecret(s: string): string {
   if (s.length <= 8) return "****";
   return `${s.slice(0, 4)}…${s.slice(-4)} (len=${s.length})`;
@@ -160,9 +193,12 @@ async function ensureBundleExtracted(
 
   await mkdir(cacheDir, { recursive: true });
 
-  const createAnswersPath = await resolveAnswersAsset(
-    demoAssetNames(demoName).createAnswers,
-    releaseTag,
+  const createAnswersPath = await pinWebchatGui(
+    await resolveAnswersAsset(
+      demoAssetNames(demoName).createAnswers,
+      releaseTag,
+    ),
+    workerIndex,
   );
   await runOrThrow(
     GTC_BIN,
