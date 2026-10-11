@@ -53,7 +53,7 @@ inputs:
       greentic-runner #611 — so those guards tested pre-fix binaries and failed
       on every scheduled run since they were added. A stale pin here does not
       announce itself: the suites that do not assert new behaviour stay green.
-    default: '1.1.13'
+    default: '1.1.14'
   install-gtc:
     description: Install the gtc CLI via cargo-binstall
     default: 'true'
