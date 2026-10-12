@@ -425,6 +425,20 @@ jobs:
             done
           }
 
+          # greentic-bundle 1.2 resolves an app pack to a built .gtpack file and
+          # refuses a pack source directory ("app pack(s) that were not
+          # materialized: <dir> -> packs/<name>.gtpack (not found)"). Build the
+          # fixture first and point the answers at the artifact.
+          (cd "$WIZARD_DEMO_APP_PACK_DIR" && greentic-pack build --in . \
+            >"$WIZARD_E2E_ROOT/wizard-demo-app-pack-build.log" 2>&1)
+          DEMO_APP_GTPACK="$WIZARD_DEMO_APP_PACK_DIR/dist/demo-app-pack.gtpack"
+          test -s "$DEMO_APP_GTPACK"
+          for answers in "$WIZARD_BUNDLE_COMPLEX_ANSWERS" "$WIZARD_BUNDLE_COMPLEX_DELEGATE_ANSWERS"; do
+            sed "s|\"${WIZARD_DEMO_APP_PACK_DIR}\"|\"${DEMO_APP_GTPACK}\"|g" "$answers" >"$answers.tmp"
+            mv "$answers.tmp" "$answers"
+          done
+          grep -q "$DEMO_APP_GTPACK" "$WIZARD_BUNDLE_COMPLEX_DELEGATE_ANSWERS"
+
           gtc wizard validate \
             --answers "$WIZARD_BUNDLE_COMPLEX_ANSWERS" \
             >"$WIZARD_E2E_ROOT/wizard-bundle-validate.log" 2>&1
@@ -455,7 +469,7 @@ jobs:
           grep -q 'oauth-oidc-generic' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
           grep -q 'greentic.secrets.aws-sm.gtpack:latest' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
           grep -q 'greentic.deploy.serverless' "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
-          grep -q "\"${WIZARD_DEMO_APP_PACK_DIR}\"" "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
+          grep -q "\"${DEMO_APP_GTPACK}\"" "$WIZARD_E2E_ROOT/wizard-bundle-inspect.json"
 
       - name: Print tenant install context
         shell: bash
